@@ -21,8 +21,12 @@ pub enum Scene {
     /// 4×2×4 chunks.
     Landscape,
     /// A skeletal tree: thin branches of finest-scale voxels running in
-    /// diagonal directions.
+    /// diagonal directions, kept connected by filling every diagonal step.
     Tree,
+    /// The same tree with those steps left unfilled, so branches break
+    /// into pieces touching only at corners — what 6-connected material
+    /// means, and what to watch while changing that rule.
+    DiagonalTree,
 }
 
 /// Where the fly camera starts and how fast it moves, per scene — a small
@@ -37,7 +41,8 @@ pub fn build_world(scene: Scene) -> World {
     match scene {
         Scene::TestBed => test_bed(),
         Scene::Landscape => landscape(),
-        Scene::Tree => tree(),
+        Scene::Tree => tree(true),
+        Scene::DiagonalTree => tree(false),
     }
 }
 
@@ -50,7 +55,7 @@ pub fn camera_start(scene: Scene) -> CameraStart {
             target: Vec3::new(15.0, 14.0, 14.0),
             speed: 6.0,
         },
-        Scene::Tree => CameraStart {
+        Scene::Tree | Scene::DiagonalTree => CameraStart {
             eye: Vec3::new(100.0, 44.0, 100.0),
             target: Vec3::new(48.0, 26.0, 48.0),
             speed: 20.0,
@@ -136,7 +141,16 @@ fn landscape() -> World {
 /// empty space connects diagonally. Nothing here calls `set_region`, and
 /// the paths are thin enough that no aligned 2³ block ever fills, so the
 /// octree keeps every voxel at size 1 (asserted in the tests below).
-fn tree() -> World {
+///
+/// `fill_diagonal_steps` decides what happens when the path crosses two
+/// voxel planes within one step, leaving two voxels that touch only along
+/// an edge. Filling the corner in keeps the tree a single connected
+/// surface; leaving it produces [`Scene::DiagonalTree`], where those
+/// branches break into pieces floating at each other's corners — the
+/// mesher's 6-connected material rule made visible, and the thing to look
+/// at while changing that rule. Both scenes grow the *same* tree, so they
+/// differ only in those joints.
+fn tree(fill_diagonal_steps: bool) -> World {
     let mut world = World::new();
     let mut rng = Rng(0x51ED_BEEF);
     grow(
@@ -146,19 +160,25 @@ fn tree() -> World {
         15.0,
         6,
         &mut rng,
+        fill_diagonal_steps,
     );
     world
 }
 
 /// Walks one branch, then splits into two or three children.
-fn grow(world: &mut World, from: Vec3, dir: Vec3, length: f32, depth: u32, rng: &mut Rng) {
+fn grow(
+    world: &mut World,
+    from: Vec3,
+    dir: Vec3,
+    length: f32,
+    depth: u32,
+    rng: &mut Rng,
+    fill_diagonal_steps: bool,
+) {
     // Under half a voxel: fine enough that a branch follows its curve
     // closely rather than cutting across it.
     const STEP: f32 = 0.45;
 
-    // Never step diagonally: material is 6-connected in the mesher, so two
-    // voxels touching only along an edge or at a corner mesh as separate
-    // pieces, and a branch built that way falls apart into floating stubs.
     let mut pos = from;
     let mut dir = dir;
     let mut last = pos.floor().as_ivec3();
@@ -167,7 +187,13 @@ fn grow(world: &mut World, from: Vec3, dir: Vec3, length: f32, depth: u32, rng: 
         // gentle curve, plus a slight pull upward so branches do not droop
         dir = (dir + perpendicular(dir, rng.angle()) * 0.05 + Vec3::Y * 0.015).normalize();
         pos += dir * STEP;
-        last = connect(world, last, pos.floor().as_ivec3());
+        let next = pos.floor().as_ivec3();
+        last = if fill_diagonal_steps {
+            connect(world, last, next)
+        } else {
+            world.set_voxel(next, Voxel::ACTIVE);
+            next
+        };
     }
 
     if depth == 0 {
@@ -187,6 +213,7 @@ fn grow(world: &mut World, from: Vec3, dir: Vec3, length: f32, depth: u32, rng: 
             length * rng.range(0.6, 0.78),
             depth - 1,
             rng,
+            fill_diagonal_steps,
         );
     }
 }
@@ -239,6 +266,37 @@ impl Rng {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn solid_voxels(scene: Scene) -> std::collections::HashSet<IVec3> {
+        active_voxels(&build_world(scene))
+            .iter()
+            .map(|&(p, _)| p)
+            .collect()
+    }
+
+    /// Number of face-connected ("6-connected") components — the same
+    /// notion of connectedness the mesher uses for material.
+    fn connected_pieces(solid: &std::collections::HashSet<IVec3>) -> usize {
+        let mut unvisited = solid.clone();
+        let mut pieces = 0;
+        while let Some(&start) = unvisited.iter().next() {
+            pieces += 1;
+            let mut queue = vec![start];
+            unvisited.remove(&start);
+            while let Some(p) = queue.pop() {
+                for axis in 0..3 {
+                    for step in [-1, 1] {
+                        let mut neighbour = p;
+                        neighbour[axis] += step;
+                        if unvisited.remove(&neighbour) {
+                            queue.push(neighbour);
+                        }
+                    }
+                }
+            }
+        }
+        pieces
+    }
 
     fn active_voxels(world: &World) -> Vec<(IVec3, u32)> {
         let mut leaves = Vec::new();
@@ -306,29 +364,40 @@ mod tests {
     /// to be a single face-connected component.
     #[test]
     fn the_tree_is_one_connected_piece() {
-        let voxels = active_voxels(&build_world(Scene::Tree));
-        let solid: std::collections::HashSet<IVec3> = voxels.iter().map(|&(p, _)| p).collect();
-
-        let start = *solid.iter().next().expect("the tree is not empty");
-        let mut seen = std::collections::HashSet::from([start]);
-        let mut queue = vec![start];
-        while let Some(p) = queue.pop() {
-            for axis in 0..3 {
-                for step in [-1, 1] {
-                    let mut neighbour = p;
-                    neighbour[axis] += step;
-                    if solid.contains(&neighbour) && seen.insert(neighbour) {
-                        queue.push(neighbour);
-                    }
-                }
-            }
-        }
+        let solid = solid_voxels(Scene::Tree);
         assert_eq!(
-            seen.len(),
-            solid.len(),
-            "the tree broke into pieces: {} of {} voxels are cut off from the trunk",
-            solid.len() - seen.len(),
-            solid.len()
+            connected_pieces(&solid),
+            1,
+            "the tree broke apart: filling the diagonal steps should leave \
+             exactly one face-connected piece"
         );
+    }
+
+    /// The point of `DiagonalTree`: the same tree with its diagonal steps
+    /// left unfilled, so the mesher — which keeps material 6-connected —
+    /// renders those joints as separate closed pieces floating at each
+    /// other's corners.
+    #[test]
+    fn the_diagonal_tree_breaks_into_pieces_at_its_diagonal_joints() {
+        let diagonal = solid_voxels(Scene::DiagonalTree);
+        let connected = solid_voxels(Scene::Tree);
+
+        assert!(
+            active_voxels(&build_world(Scene::DiagonalTree))
+                .iter()
+                .all(|&(_, size)| size == 1),
+            "the diagonal tree must be finest-scale too"
+        );
+        assert!(
+            connected_pieces(&diagonal) > 1,
+            "the diagonal tree is supposed to come apart, but it is one piece"
+        );
+        // Same tree, minus the corner voxels that filling adds: the two
+        // scenes must differ only at those joints.
+        assert!(
+            diagonal.is_subset(&connected),
+            "the two trees should share every voxel the diagonal one has"
+        );
+        assert!(diagonal.len() < connected.len());
     }
 }

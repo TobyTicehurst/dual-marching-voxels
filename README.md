@@ -29,13 +29,16 @@ cargo test --workspace     # meshing invariants: watertightness, Euler,
 cargo run -p voxel-bevy    # demo scene
 ```
 
-Which scene runs is `config::SCENE`. `Tree` (the default) grows a branching
-tree one finest-scale voxel at a time, running diagonally to the voxel axes
-so nearly every surface is stair-stepped; `TestBed` is a small hand-placed
-scene for examining one behaviour at a time — currently one 4³ voxel with
-two 2³ voxels on its +x face, the minimal octree scale transition; and
-`Landscape` is the full terrain-and-objects demo. Add new experiments to
-`scene::test_bed`.
+Which scene runs is `config::SCENE`. `DiagonalTree` (the default) and `Tree`
+grow the same branching tree one finest-scale voxel at a time, running
+diagonally to the voxel axes so nearly every surface is stair-stepped;
+`Tree` fills in each diagonal step to keep the tree one connected surface,
+while `DiagonalTree` leaves them, so branches break into 56 pieces touching
+only at their corners — the mesher's 6-connected material rule made visible.
+`TestBed` is a small hand-placed scene for examining one behaviour at a time
+— currently one 4³ voxel with two 2³ voxels on its +x face, the minimal
+octree scale transition — and `Landscape` is the full terrain-and-objects
+demo. Add new experiments to `scene::test_bed`.
 
 Demo controls: the cursor is captured — **mouse** to look, **WASD + QE**
 (or Space/Shift) to fly, **scroll** to change speed, **F** to toggle

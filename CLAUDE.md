@@ -39,7 +39,8 @@ Dual Marching Cubes, rendered with Bevy.
   choices: `SCENE` picks a scene from `scene.rs` (`TestBed`, the small
   hand-placed scratch scene for testing one behaviour at a time — put new
   experiments there; `Tree`, a diagonal-heavy tree grown entirely from
-  finest-scale voxels; or `Landscape`, the full demo), plus debug flags
+  finest-scale voxels, with `DiagonalTree` the same tree left broken at its
+  diagonal joints; or `Landscape`, the full demo), plus debug flags
   (chunk bounds, full voxel grid, per-voxel boxes at their own scale,
   solid voxel-center markers, and the two views fed by one
   `dmc::inspect_world` run — active meshing-cell boxes and the dual

@@ -8,9 +8,9 @@ use crate::scene::Scene;
 
 /// Which scene to build — see [`crate::scene`]. `TestBed` is the small
 /// hand-placed scratch scene for testing one behaviour at a time, `Tree` a
-/// diagonal-heavy tree of finest-scale voxels, and `Landscape` the full
-/// demo.
-pub const SCENE: Scene = Scene::Tree;
+/// diagonal-heavy tree of finest-scale voxels, `DiagonalTree` that same
+/// tree left broken at its diagonal joints, and `Landscape` the full demo.
+pub const SCENE: Scene = Scene::DiagonalTree;
 
 /// Outline every chunk's 32³ bounds.
 pub const SHOW_CHUNK_BOUNDS: bool = true;
