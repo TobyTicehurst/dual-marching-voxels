@@ -5,7 +5,7 @@ use bevy::input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll};
 use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, CursorOptions, WindowFocused};
 
-use crate::scene;
+use crate::{config, scene};
 
 #[derive(Component)]
 pub struct FlyCamera {
@@ -21,8 +21,8 @@ pub fn plugin(app: &mut App) {
 }
 
 fn spawn_camera(mut commands: Commands) {
-    let (eye, target) = scene::camera_start();
-    let transform = Transform::from_translation(eye).looking_at(target, Vec3::Y);
+    let start = scene::camera_start(config::SCENE);
+    let transform = Transform::from_translation(start.eye).looking_at(start.target, Vec3::Y);
     let (yaw, pitch, _) = transform.rotation.to_euler(EulerRot::YXZ);
     commands.spawn((
         Camera3d::default(),
@@ -35,7 +35,7 @@ fn spawn_camera(mut commands: Commands) {
             ..default()
         },
         FlyCamera {
-            speed: 40.0,
+            speed: start.speed,
             sensitivity: 0.003,
             yaw,
             pitch,

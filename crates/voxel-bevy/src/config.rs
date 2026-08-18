@@ -3,6 +3,13 @@
 
 use bevy::color::Color;
 
+use crate::scene::Scene;
+
+/// Which scene to build — see [`crate::scene`]. `TestBed` is the small
+/// hand-placed scratch scene for testing one behaviour at a time;
+/// `Landscape` is the full demo.
+pub const SCENE: Scene = Scene::TestBed;
+
 /// Outline every chunk's 32³ bounds.
 pub const SHOW_CHUNK_BOUNDS: bool = true;
 pub const CHUNK_BOUNDS_COLOR: Color = Color::srgb(0.25, 0.25, 0.35);
@@ -23,6 +30,10 @@ pub const ACTIVE_VOXEL_BOX_COLOR: Color = Color::srgb(0.1, 0.9, 0.9);
 /// fills several corner slots.
 pub const SHOW_ACTIVE_CELL_BOXES: bool = true;
 pub const ACTIVE_CELL_BOX_COLOR: Color = Color::srgb(0.95, 0.2, 0.95);
+/// Cells wider than this on any axis are not drawn: one bordering a large
+/// empty leaf stretches to that leaf's center and would swamp the view.
+/// Raise it to see those too (`f32::INFINITY` draws every cell).
+pub const ACTIVE_CELL_BOX_MAX_EXTENT: f32 = 4.0;
 
 /// A small sphere at every active voxel's center, scaled to the voxel.
 pub const SHOW_VOXEL_MARKERS: bool = true;

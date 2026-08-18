@@ -172,6 +172,29 @@ fn coarse_voxel_next_to_fine_voxel_meshes_crack_free() {
     assert!(signed_volume(&mesh) > 0.0);
 }
 
+/// The voxel-bevy `TestBed` scene: one 4³ voxel with two 2³ voxels on
+/// its +x face, covering half of it. The half-covered coarse face is the
+/// case that needs hanging dual cells in its polygon, so this pins the
+/// demo scene's geometry as well as the behaviour.
+#[test]
+fn coarse_voxel_with_two_half_scale_neighbours_is_watertight() {
+    let mut world = World::new();
+    let chunk = world.chunk_mut(IVec3::ZERO);
+    chunk.set_region(IVec3::new(12, 12, 12), 4, Voxel::ACTIVE);
+    chunk.set_region(IVec3::new(16, 12, 12), 2, Voxel::ACTIVE);
+    chunk.set_region(IVec3::new(16, 14, 12), 2, Voxel::ACTIVE);
+
+    let mesh = mesh_world(&world);
+    assert_closed(&mesh, 2, "4³ voxel + two 2³ neighbours");
+    assert!(signed_volume(&mesh) > 0.0);
+    // The transition must actually exercise the n-gon path: a plain
+    // all-quad dual would leave T-junction cracks here.
+    assert!(
+        mesh.faces.iter().any(|f| f.len() > 4),
+        "expected n-gon faces at the scale transition"
+    );
+}
+
 #[test]
 fn coarse_slab_under_fine_terrain_transition_is_crack_free() {
     // Bottom half at 8× scale, top half fine — a big T-junction wall.

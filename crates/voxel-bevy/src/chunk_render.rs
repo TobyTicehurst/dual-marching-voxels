@@ -22,7 +22,8 @@ pub(crate) fn setup(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut wireframe: ResMut<WireframeConfig>,
 ) {
-    let world = scene::build_demo_world();
+    let world = scene::build_world(config::SCENE);
+    info!("scene: {:?}", config::SCENE);
 
     if config::SHOW_MESHED_SURFACE {
         let poly = DualMarchingCubes.mesh_world(&world);

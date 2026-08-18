@@ -32,9 +32,12 @@ Dual Marching Cubes, rendered with Bevy.
   hand-edit case data; it is derived and invariant-tested), `PolyMesh`
   (logical quad-dominant output), `MeshData` (flat-shaded triangles),
   `analysis` (weld/edge-stats/Euler/volume used heavily by tests).
-- `crates/voxel-bevy` — demo binary. `config.rs` holds compile-time debug
-  flags (chunk bounds, full voxel grid, per-voxel boxes/spheres at their
-  own scale, active meshing-cell boxes via `dmc::collect_dual_cells`,
+- `crates/voxel-bevy` — demo binary. `config.rs` holds compile-time
+  choices: `SCENE` picks a scene from `scene.rs` (`TestBed`, the small
+  hand-placed scratch scene for testing one behaviour at a time — put new
+  experiments there; or `Landscape`, the full demo), plus debug flags
+  (chunk bounds, full voxel grid, per-voxel boxes/spheres at their own
+  scale, active meshing-cell boxes via `dmc::collect_dual_cells`,
   wireframe). Fly camera captures the cursor: mouse to look,
   WASD+QE, scroll for speed, F for wireframe, Esc to quit.
 

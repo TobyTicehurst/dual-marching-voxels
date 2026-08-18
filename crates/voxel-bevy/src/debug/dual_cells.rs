@@ -30,8 +30,15 @@ pub fn draw(mut gizmos: Gizmos, cells: Res<DualCells>) {
             .fold((cell.corners[0], cell.corners[0]), |(lo, hi), &c| {
                 (lo.min(c), hi.max(c))
             });
+        let extent = max - min;
+        // A cell bordering a large empty leaf reaches all the way to that
+        // leaf's center, so it can be far bigger than the voxels it
+        // surfaces — legitimate, but it swamps the view. Skip those.
+        if extent.max_element() > config::ACTIVE_CELL_BOX_MAX_EXTENT {
+            continue;
+        }
         gizmos.cube(
-            Transform::from_translation((min + max) / 2.0).with_scale(max - min),
+            Transform::from_translation((min + max) / 2.0).with_scale(extent),
             config::ACTIVE_CELL_BOX_COLOR,
         );
     }
