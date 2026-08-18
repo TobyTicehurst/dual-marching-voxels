@@ -52,9 +52,13 @@ Dual Marching Cubes, rendered with Bevy.
 Dual cells live at octree vertices; their 8 corners are the surrounding
 leaves (a coarse leaf may fill several slots). Per cell the patch table
 splits crossed edges into surface patches; one vertex per patch at the
-centroid of its crossings (crossing = where the center-to-center segment
-pierces the two leaves' shared plane; the single hook where scalar data
-would interpolate differently). Surface faces are dual to crossed leaf
+centroid of its crossings (crossing = the center of the face the two
+leaves share; the single hook where richer data would interpolate
+differently). Taking the shared face rather than the segment between leaf
+centers is what makes the surface independent of how *empty* space is
+partitioned — otherwise a lone voxel meshes lopsided, the same shape
+meshes differently depending on its octree alignment, and the world edge
+behaves unlike ordinary empty space. Surface faces are dual to crossed leaf
 adjacencies: a polygon over *all* dual cells on the shared face's boundary
 — hanging vertices included, which is what makes scale transitions
 watertight. Traversal is the standard cell/face/edge/vert proc recursion,

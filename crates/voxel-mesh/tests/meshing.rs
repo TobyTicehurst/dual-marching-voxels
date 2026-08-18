@@ -240,6 +240,96 @@ fn mixed_resolution_sphere_is_watertight() {
     assert!(signed_volume(&mesh) > 0.0);
 }
 
+// ------------------------------------------------------ vertex placement
+
+/// An isolated voxel is symmetric, so its mesh must be too — and it must
+/// not matter where the voxel sits. Every crossing is the center of the
+/// voxel's own face (its empty neighbours are never smaller than it), so
+/// each of the 8 dual vertices is the centroid of three of those face
+/// centers: a cube of half-extent `size / 6` about the voxel center.
+///
+/// This fails if crossings are placed on the segment between leaf
+/// centers, because then the surface follows the size of whatever empty
+/// leaf happens to be opposite — which varies from face to face, moves
+/// when the voxel is re-aligned in the octree, and goes wild at the world
+/// edge where the neighbour is a whole absent chunk.
+#[test]
+fn a_lone_voxel_meshes_to_the_same_symmetric_cube_wherever_it_sits() {
+    for (min, size) in [
+        (IVec3::splat(16), 1u32),  // middle of a chunk
+        (IVec3::new(5, 9, 23), 1), // arbitrary, off every node boundary
+        (IVec3::ZERO, 1),          // corner: three sides face absent chunks
+        (IVec3::splat(12), 4),     // aligned to octree node boundaries
+        (IVec3::splat(16), 4),     // one node over — the mirrored case
+        (IVec3::splat(28), 4),     // against the far corner of the chunk
+    ] {
+        let mut world = World::new();
+        world
+            .chunk_mut(IVec3::ZERO)
+            .set_region(min, size, Voxel::ACTIVE);
+        let mesh = weld(&mesh_world(&world));
+        let what = format!("{size}³ voxel at {min}");
+
+        assert_closed(&mesh, 2, &what);
+        assert_eq!(mesh.positions.len(), 8, "{what}: expected 8 dual vertices");
+
+        let center = min.as_vec3() + Vec3::splat(size as f32 / 2.0);
+        let half = Vec3::splat(size as f32 / 6.0);
+        for p in &mesh.positions {
+            assert!(
+                (*p - center).abs().abs_diff_eq(half, 1e-4),
+                "{what}: vertex {p:?} is not at the corner of a cube of \
+                 half-extent {half:?} about {center:?}"
+            );
+        }
+    }
+}
+
+/// A shape must mesh the same way wherever it is put, even though moving
+/// it changes the sizes of the merged empty leaves around it completely.
+#[test]
+fn a_shape_meshes_congruently_wherever_it_is_placed() {
+    // An L of mixed scales, so this covers transitions as well as the
+    // lone-voxel case above.
+    let build = |origin: IVec3| {
+        let mut world = World::new();
+        let chunk = world.chunk_mut(IVec3::ZERO);
+        chunk.set_region(origin, 4, Voxel::ACTIVE);
+        chunk.set_region(origin + IVec3::new(4, 0, 0), 2, Voxel::ACTIVE);
+        chunk.set_region(origin + IVec3::new(0, 4, 0), 2, Voxel::ACTIVE);
+        world
+    };
+    let shape_at = |origin: IVec3| {
+        let mesh = weld(&mesh_world(&build(origin)));
+        // Positions relative to the shape, rounded before comparing:
+        // subtracting different origins from the same geometry can differ
+        // in the last bit, which says nothing about congruence.
+        let mut relative: Vec<[i64; 3]> = mesh
+            .positions
+            .iter()
+            .map(|p| {
+                let d = (*p - origin.as_vec3()) * 10_000.0;
+                [d.x.round() as i64, d.y.round() as i64, d.z.round() as i64]
+            })
+            .collect();
+        relative.sort();
+        relative
+    };
+
+    // (4,4,4) is deep inside one octree node; (12,12,12) and (16,16,16)
+    // sit on different node boundaries; (24,24,24) puts the shape against
+    // the chunk's far corner, where the neighbours are absent chunks.
+    let reference = shape_at(IVec3::splat(4));
+    assert!(!reference.is_empty());
+    for origin in [IVec3::splat(12), IVec3::splat(16), IVec3::splat(24)] {
+        assert_eq!(
+            shape_at(origin),
+            reference,
+            "the same shape meshed differently at {origin}"
+        );
+    }
+}
+
 // ------------------------------------------------- render triangulation
 
 /// Area-weighted normal of a polygon, robust to nearly collinear corners.

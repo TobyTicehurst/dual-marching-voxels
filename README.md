@@ -63,9 +63,12 @@ several corner slots). Per cell, a generated 256-case table groups the
 crossed edges into surface patches — two crossed edges join when a face's
 surface segment connects them, with ambiguous faces resolved so material
 is 6-connected. Each patch gets one dual vertex at the centroid of its
-crossings; a crossing sits where the segment between two leaf centers
-pierces their shared plane (the one interpolation richer voxel data would
-change). Each crossed leaf adjacency then becomes a polygon over the dual
+crossings; a crossing sits at the center of the face the two leaves share
+(the one interpolation richer voxel data would change). Using the shared
+face keeps the surface independent of how *empty* space happens to be
+partitioned, so an isolated voxel meshes symmetrically, a shape meshes the
+same way wherever it sits in the octree, and the edge of the world behaves
+like ordinary empty space. Each crossed leaf adjacency then becomes a polygon over the dual
 cells along its shared face's boundary — quads in uniform regions, n-gons
 at scale transitions (hanging vertices), which is exactly what keeps those
 transitions crack-free.

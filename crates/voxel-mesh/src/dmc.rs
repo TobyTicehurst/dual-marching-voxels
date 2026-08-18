@@ -12,10 +12,10 @@
 //!
 //! Per dual cell, the patch table ([`crate::patches`]) splits the crossed
 //! edges into surface patches; each patch gets one dual vertex at the
-//! centroid of its edge crossings. A crossing sits where the segment
-//! between the two leaf centers pierces the plane the two leaves share —
-//! for equal sizes, the midpoint. No normals, no QEF; scalar voxel data
-//! would only change that one interpolation.
+//! centroid of its edge crossings, and a crossing sits at the center of
+//! the face the two leaves share (see [`crossing`], which explains why
+//! that and not the midpoint of their centers). No normals, no QEF;
+//! richer voxel data would only change that one interpolation.
 //!
 //! The surface faces are dual to the crossed **minimal faces** of the
 //! octree: for face-adjacent leaves of differing state, every dual cell on
@@ -222,6 +222,46 @@ impl<N: TreeNode> CellRef<N> {
 
 fn tangents(axis: usize) -> (usize, usize) {
     ((axis + 1) % 3, (axis + 2) % 3)
+}
+
+/// Where the surface crosses between two face-adjacent leaves of
+/// differing state: the **center of the face they share**, which lies on
+/// the plane through the octree vertex `q` normal to `axis`. `neg` is the
+/// leaf on the negative side of that plane.
+///
+/// The shared face is where the two leaves overlap — both their faces
+/// when the sizes match, the smaller leaf's face when they don't. Using
+/// it, rather than where the segment between the two leaf *centers*
+/// pierces the plane, is what keeps the surface independent of how
+/// *empty* space happens to be partitioned: a solid voxel meets its
+/// neighbour at its own face center whether that neighbour is one voxel
+/// or a merged 32-wide leaf. So the same solid shape meshes the same way
+/// wherever it sits in the octree, an isolated voxel comes out symmetric,
+/// and the edge of the world behaves exactly like adjacent inactive
+/// voxels rather than like the huge empty leaf that represents it.
+///
+/// This is the one place richer voxel data would interpolate instead of
+/// taking a midpoint.
+fn crossing<N: TreeNode>(neg: CellRef<N>, pos: CellRef<N>, axis: usize, q: IVec3) -> Vec3 {
+    // Only a crossed edge reaches here, so the two slots hold different
+    // leaves and must therefore abut the plane rather than span it.
+    debug_assert_eq!(
+        neg.min[axis] + neg.size,
+        q[axis],
+        "leaves do not abut at {q}"
+    );
+    debug_assert_eq!(pos.min[axis], q[axis], "leaves do not abut at {q}");
+
+    let mut p = Vec3::ZERO;
+    p[axis] = q[axis] as f32;
+    let (u, v) = tangents(axis);
+    for t in [u, v] {
+        let lo = neg.min[t].max(pos.min[t]);
+        let hi = (neg.min[t] + neg.size).min(pos.min[t] + pos.size);
+        debug_assert!(lo < hi, "face-adjacent leaves must overlap on axis {t}");
+        p[t] = (lo + hi) as f32 * 0.5;
+    }
+    p
 }
 
 fn unit(axis: usize) -> IVec3 {
@@ -496,15 +536,7 @@ impl Builder {
             let mut count = 0;
             for (e, &(a, b)) in EDGE_ENDPOINTS.iter().enumerate() {
                 if patch & (1 << e) != 0 {
-                    let m = edge_axis(e);
-                    let (ca, cb) = (slots[a].center(), slots[b].center());
-                    // The two slot leaves of a crossed edge abut the plane
-                    // through q along the edge's axis; the crossing is
-                    // where the segment between their centers pierces that
-                    // shared plane. Equal sizes ⇒ the midpoint. Scalar
-                    // voxel data would replace this interpolation.
-                    let t = (q[m] as f32 - ca[m]) / (cb[m] - ca[m]);
-                    sum += ca.lerp(cb, t);
+                    sum += crossing(slots[a], slots[b], edge_axis(e), q);
                     count += 1;
                 }
             }
