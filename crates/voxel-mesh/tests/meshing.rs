@@ -8,6 +8,7 @@ use voxel_core::voxel::Voxel;
 use voxel_core::world::World;
 use voxel_mesh::analysis::{edge_stats, euler_characteristic, signed_volume, weld};
 use voxel_mesh::dmc::{Inspect, inspect_world, mesh_octree, mesh_world};
+use voxel_mesh::mesh_data::MeshData;
 use voxel_mesh::poly_mesh::PolyMesh;
 
 fn world_from_fn(min: IVec3, max: IVec3, f: impl Fn(IVec3) -> Voxel) -> World {
@@ -237,6 +238,81 @@ fn mixed_resolution_sphere_is_watertight() {
     let mesh = mesh_world(&world);
     assert_closed(&mesh, 2, "mixed-resolution sphere");
     assert!(signed_volume(&mesh) > 0.0);
+}
+
+// ------------------------------------------------- render triangulation
+
+/// Area-weighted normal of a polygon, robust to nearly collinear corners.
+fn newell(corners: &[Vec3]) -> Vec3 {
+    let mut n = Vec3::ZERO;
+    for i in 0..corners.len() {
+        n += corners[i].cross(corners[(i + 1) % corners.len()]);
+    }
+    n
+}
+
+/// No triangle may face away from the polygon it came from. Scale
+/// transitions produce n-gons that are mildly non-convex, and fanning
+/// those from a fixed corner emits a backfacing sliver that renders as a
+/// spike sticking out of the surface.
+fn assert_no_folded_triangles(mesh: &PolyMesh, what: &str) {
+    let mut checked = 0;
+    for (i, face) in mesh.faces.iter().enumerate() {
+        let corners: Vec<Vec3> = face.iter().map(|&v| mesh.positions[v as usize]).collect();
+        let normal = newell(&corners);
+        if normal.length_squared() <= 1e-12 {
+            continue;
+        }
+        let normal = normal.normalize();
+
+        // Triangulate this one face through the real API.
+        let mut single = PolyMesh::new();
+        let single_face: Vec<u32> = corners.iter().map(|&p| single.push_vertex(p)).collect();
+        single.push_face(single_face);
+        let data = MeshData::flat_from_polys(&single);
+
+        for triangle in data.normals.chunks(3) {
+            assert!(
+                triangle[0].dot(normal) > 0.0,
+                "{what}: face {i} ({} corners) produced a triangle facing {:?}, \
+                 but the face faces {normal:?}",
+                corners.len(),
+                triangle[0]
+            );
+        }
+        checked += 1;
+    }
+    assert!(checked > 0, "{what}: nothing was checked");
+}
+
+#[test]
+fn scale_transitions_triangulate_without_folding() {
+    // The voxel-bevy TestBed scene: a coarse voxel, two half-scale
+    // neighbours on its face, and coarse voxels stacked above — the
+    // configuration whose transition n-gons exposed the fold.
+    let mut world = World::new();
+    let chunk = world.chunk_mut(IVec3::ZERO);
+    chunk.set_region(IVec3::new(12, 12, 12), 4, Voxel::ACTIVE);
+    chunk.set_region(IVec3::new(16, 12, 12), 2, Voxel::ACTIVE);
+    chunk.set_region(IVec3::new(16, 14, 12), 2, Voxel::ACTIVE);
+    chunk.set_region(IVec3::new(12, 16, 12), 4, Voxel::ACTIVE);
+    chunk.set_region(IVec3::new(16, 16, 12), 4, Voxel::ACTIVE);
+    let mesh = mesh_world(&world);
+    assert!(
+        mesh.faces.iter().any(|f| f.len() > 4),
+        "this configuration must exercise transition n-gons"
+    );
+    assert_no_folded_triangles(&mesh, "stacked scale transition");
+}
+
+#[test]
+fn mixed_resolution_shapes_triangulate_without_folding() {
+    let fine = shapes::sphere(Vec3::splat(16.0), 11.0);
+    let coarse = shapes::quantized(shapes::sphere(Vec3::splat(16.0), 11.0), 4);
+    let world = world_from_fn(IVec3::ZERO, IVec3::ZERO, move |p: IVec3| {
+        if p.x < 16 { coarse(p) } else { fine(p) }
+    });
+    assert_no_folded_triangles(&mesh_world(&world), "mixed-resolution sphere");
 }
 
 // ------------------------------------------------------------ inspection

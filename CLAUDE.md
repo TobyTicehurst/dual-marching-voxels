@@ -15,7 +15,10 @@ Dual Marching Cubes, rendered with Bevy.
 - **Flat shading**: normals are derived from geometry at render-buffer time
   (`MeshData::flat_from_polys`), duplicated per triangle. Meshing itself
   never computes or stores normals — that is the point of the algorithm
-  choice.
+  choice. Dual faces are neither reliably convex nor planar (scale
+  transitions make them n-gons), so that triangulation must never fan a
+  polygon from one fixed corner: doing so emits backfacing slivers. Tests
+  assert no triangle faces away from its own polygon.
 - **Modularity**: meshers implement `voxel_mesh::Mesher`; storage is
   consumed through `voxel_core::tree_view::TreeNode`. New algorithms
   (Surface Nets, …) or storage (GridMaps, …) plug into those seams.
