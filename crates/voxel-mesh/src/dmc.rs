@@ -62,7 +62,7 @@ use crate::poly_mesh::PolyMesh;
 /// Meshes every chunk of the world, seams included, into one mesh with
 /// shared dual vertices. Positions are in world voxel units.
 pub fn mesh_world(world: &World) -> PolyMesh {
-    run_world(world, false).0
+    run_world(world, Inspect::NONE).0
 }
 
 /// Inspection data for one *active* dual cell (a meshing cell whose
@@ -81,13 +81,57 @@ pub struct DualCellInfo {
     pub corners: [Vec3; 8],
 }
 
-/// Runs the same traversal as [`mesh_world`] but returns every active
-/// dual cell instead of the mesh. Debug/inspection only — not optimised.
-pub fn collect_dual_cells(world: &World) -> Vec<DualCellInfo> {
-    run_world(world, true).1
+/// One edge of the octree's **dual graph**: a minimal face-adjacency
+/// between two leaves, i.e. the graph whose nodes are voxel centers and
+/// whose edges join voxels that share a face. The mesher's whole job can
+/// be read off this graph — every `crossed` edge (the two leaves differ in
+/// state) becomes one surface polygon, and the dual cells are its
+/// vertices.
+#[derive(Debug, Clone, Copy)]
+pub struct DualEdge {
+    /// Center of the leaf on the negative side of the shared face.
+    pub a: Vec3,
+    /// Center of the leaf on the positive side.
+    pub b: Vec3,
+    /// Whether the two leaves differ in state — the adjacencies that
+    /// produce surface.
+    pub crossed: bool,
 }
 
-fn run_world(world: &World, collect_cells: bool) -> (PolyMesh, Vec<DualCellInfo>) {
+/// What extra data an inspection run should collect. Meshing itself never
+/// pays for these — [`mesh_world`] passes [`Inspect::NONE`].
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Inspect {
+    pub dual_cells: bool,
+    pub dual_graph: bool,
+}
+
+impl Inspect {
+    pub const NONE: Inspect = Inspect {
+        dual_cells: false,
+        dual_graph: false,
+    };
+    pub const ALL: Inspect = Inspect {
+        dual_cells: true,
+        dual_graph: true,
+    };
+}
+
+/// What an inspection run collected; requested parts are filled, the rest
+/// stay empty.
+#[derive(Debug, Default)]
+pub struct Inspection {
+    pub dual_cells: Vec<DualCellInfo>,
+    pub dual_graph: Vec<DualEdge>,
+}
+
+/// Runs the same traversal as [`mesh_world`] but returns its internal
+/// structure instead of the mesh. Debug/inspection only — not optimised.
+pub fn inspect_world(world: &World, what: Inspect) -> Inspection {
+    run_world(world, what).1
+}
+
+fn run_world(world: &World, what: Inspect) -> (PolyMesh, Inspection) {
     let side = CHUNK_SIZE as i32;
     let coords = world.chunk_coords();
     mesh_lattice(
@@ -103,7 +147,7 @@ fn run_world(world: &World, collect_cells: bool) -> (PolyMesh, Vec<DualCellInfo>
         },
         &coords,
         side,
-        collect_cells,
+        what,
     )
 }
 
@@ -127,7 +171,7 @@ pub fn mesh_octree(tree: &Octree, origin: IVec3) -> PolyMesh {
         },
         &[IVec3::ZERO],
         side,
-        false,
+        Inspect::NONE,
     )
     .0
 }
@@ -207,18 +251,19 @@ struct Builder {
     mesh: PolyMesh,
     dual_cells: HashMap<IVec3, DualCell>,
     faces: Vec<FaceRec>,
-    /// `Some` when the caller wants [`DualCellInfo`] collected too.
-    cell_info: Option<Vec<DualCellInfo>>,
+    /// What to record beyond the mesh, and the recordings so far.
+    what: Inspect,
+    inspection: Inspection,
 }
 
 fn mesh_lattice<'a>(
     root_at: &dyn Fn(IVec3) -> CellRef<&'a Node>,
     coords: &[IVec3],
     side: i32,
-    collect_cells: bool,
-) -> (PolyMesh, Vec<DualCellInfo>) {
+    what: Inspect,
+) -> (PolyMesh, Inspection) {
     let mut b = Builder {
-        cell_info: collect_cells.then(Vec::new),
+        what,
         ..Builder::default()
     };
 
@@ -437,8 +482,8 @@ impl Builder {
         if mask == 0 || mask == 0xFF {
             return;
         }
-        if let Some(cells) = &mut self.cell_info {
-            cells.push(DualCellInfo {
+        if self.what.dual_cells {
+            self.inspection.dual_cells.push(DualCellInfo {
                 vertex: q,
                 mask,
                 corners: slots.map(|s| s.center()),
@@ -477,7 +522,17 @@ impl Builder {
         rmin: IVec3,
         rsize: i32,
     ) {
-        if neg.active() == pos.active() {
+        let crossed = neg.active() != pos.active();
+        // Every call here is one minimal face-adjacency between two
+        // leaves, crossed or not — i.e. exactly one dual-graph edge.
+        if self.what.dual_graph {
+            self.inspection.dual_graph.push(DualEdge {
+                a: neg.center(),
+                b: pos.center(),
+                crossed,
+            });
+        }
+        if !crossed {
             return;
         }
         debug_assert_eq!(neg.min[n] + neg.size, rmin[n], "face plane mismatch");
@@ -522,7 +577,7 @@ impl Builder {
         Some(cell.patch_verts[p as usize])
     }
 
-    fn finish(mut self) -> (PolyMesh, Vec<DualCellInfo>) {
+    fn finish(mut self) -> (PolyMesh, Inspection) {
         let faces = std::mem::take(&mut self.faces);
         for f in &faces {
             let (u, v) = tangents(f.axis);
@@ -548,6 +603,6 @@ impl Builder {
             }
             self.mesh.push_face(ids);
         }
-        (self.mesh, self.cell_info.unwrap_or_default())
+        (self.mesh, self.inspection)
     }
 }

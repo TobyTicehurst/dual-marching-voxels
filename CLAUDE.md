@@ -36,9 +36,12 @@ Dual Marching Cubes, rendered with Bevy.
   choices: `SCENE` picks a scene from `scene.rs` (`TestBed`, the small
   hand-placed scratch scene for testing one behaviour at a time — put new
   experiments there; or `Landscape`, the full demo), plus debug flags
-  (chunk bounds, full voxel grid, per-voxel boxes/spheres at their own
-  scale, active meshing-cell boxes via `dmc::collect_dual_cells`,
-  wireframe). Fly camera captures the cursor: mouse to look,
+  (chunk bounds, full voxel grid, per-voxel boxes at their own scale,
+  solid voxel-center markers, and the two views fed by one
+  `dmc::inspect_world` run — active meshing-cell boxes and the dual
+  graph). `SURFACE_ALPHA` makes the meshed surface translucent so the
+  structure inside it stays visible. Fly camera captures the cursor:
+  mouse to look,
   WASD+QE, scroll for speed, F for wireframe, Esc to quit.
 
 ## Algorithm cheat-sheet

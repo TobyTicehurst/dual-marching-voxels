@@ -1,29 +1,15 @@
 //! A box for every **active meshing cell** (dual cell): the cells the
 //! 256-case patch table runs on, spanning between voxel centers — so
 //! voxel centers sit on each box's corners, or on its edges/faces where a
-//! coarser voxel fills several corner slots. Collected once at startup
-//! from the same traversal the mesher uses.
+//! coarser voxel fills several corner slots.
 
 use bevy::prelude::*;
-use voxel_mesh::dmc::{DualCellInfo, collect_dual_cells};
 
-use crate::chunk_render::VoxelWorldRes;
 use crate::config;
+use crate::debug::inspect::Inspected;
 
-#[derive(Resource)]
-pub struct DualCells(Vec<DualCellInfo>);
-
-pub fn collect(mut commands: Commands, world: Res<VoxelWorldRes>) {
-    let cells = collect_dual_cells(&world.0);
-    info!(
-        "collected {} active meshing cells for debug view",
-        cells.len()
-    );
-    commands.insert_resource(DualCells(cells));
-}
-
-pub fn draw(mut gizmos: Gizmos, cells: Res<DualCells>) {
-    for cell in &cells.0 {
+pub fn draw(mut gizmos: Gizmos, inspected: Res<Inspected>) {
+    for cell in &inspected.0.dual_cells {
         let (min, max) = cell
             .corners
             .iter()

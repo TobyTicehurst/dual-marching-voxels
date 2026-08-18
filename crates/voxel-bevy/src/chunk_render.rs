@@ -37,8 +37,13 @@ pub(crate) fn setup(
         commands.spawn((
             Mesh3d(meshes.add(mesh_convert::to_bevy_mesh(&data))),
             MeshMaterial3d(materials.add(StandardMaterial {
-                base_color: Color::srgb(0.55, 0.65, 0.5),
+                base_color: Color::srgba(0.55, 0.65, 0.5, config::SURFACE_ALPHA),
                 perceptual_roughness: 0.95,
+                alpha_mode: if config::SURFACE_ALPHA < 1.0 {
+                    AlphaMode::Blend
+                } else {
+                    AlphaMode::Opaque
+                },
                 ..default()
             })),
             Transform::IDENTITY,

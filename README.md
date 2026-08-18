@@ -37,11 +37,16 @@ experiments to `scene::test_bed`.
 
 Demo controls: the cursor is captured — **mouse** to look, **WASD + QE**
 (or Space/Shift) to fly, **scroll** to change speed, **F** to toggle
-wireframe, **Esc** to quit. Debug renderers (chunk bounds, full voxel grid,
-per-voxel boxes/spheres drawn at each voxel's own scale, and boxes for the
-active *meshing* cells — the dual cells spanning between voxel centers, so
-voxel centers sit on their corners/edges/faces) are compile-time flags in
-`crates/voxel-bevy/src/config.rs`.
+wireframe, **Esc** to quit.
+
+Debug renderers are compile-time flags in `crates/voxel-bevy/src/config.rs`:
+chunk bounds, the full voxel grid, a box around each voxel at its own scale,
+a solid marker at each voxel center, boxes for the active *meshing* cells
+(the dual cells spanning between voxel centers, so those centers sit on
+their corners/edges/faces), and the **dual graph** — an edge between the
+centers of every pair of face-adjacent leaves, with the crossed ones (each
+of which becomes exactly one surface polygon) highlighted. `SURFACE_ALPHA`
+makes the meshed surface translucent so the structure inside stays visible.
 
 Automated render verification (screenshots frame 150, then exits):
 

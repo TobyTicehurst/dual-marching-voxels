@@ -7,7 +7,7 @@ use voxel_core::shapes;
 use voxel_core::voxel::Voxel;
 use voxel_core::world::World;
 use voxel_mesh::analysis::{edge_stats, euler_characteristic, signed_volume, weld};
-use voxel_mesh::dmc::{mesh_octree, mesh_world};
+use voxel_mesh::dmc::{Inspect, inspect_world, mesh_octree, mesh_world};
 use voxel_mesh::poly_mesh::PolyMesh;
 
 fn world_from_fn(min: IVec3, max: IVec3, f: impl Fn(IVec3) -> Voxel) -> World {
@@ -237,6 +237,61 @@ fn mixed_resolution_sphere_is_watertight() {
     let mesh = mesh_world(&world);
     assert_closed(&mesh, 2, "mixed-resolution sphere");
     assert!(signed_volume(&mesh) > 0.0);
+}
+
+// ------------------------------------------------------------ inspection
+
+#[test]
+fn dual_graph_is_the_full_adjacency_graph_and_its_crossings_are_the_faces() {
+    let world = world_from_fn(
+        IVec3::ZERO,
+        IVec3::ZERO,
+        shapes::sphere(Vec3::splat(16.0), 10.0),
+    );
+    let mesh = mesh_world(&world);
+    let inspection = inspect_world(&world, Inspect::ALL);
+
+    let crossed = inspection.dual_graph.iter().filter(|e| e.crossed).count();
+    assert_eq!(
+        crossed,
+        mesh.faces.len(),
+        "each crossed adjacency must produce exactly one surface polygon"
+    );
+    assert!(
+        crossed < inspection.dual_graph.len(),
+        "the graph must carry uncrossed adjacencies too, not just surface ones"
+    );
+    assert!(
+        inspection.dual_graph.iter().all(|e| e.a != e.b),
+        "an adjacency joins two distinct leaves"
+    );
+    // Every dual cell the mesher kept is genuinely a mixed one.
+    assert!(!inspection.dual_cells.is_empty());
+    assert!(
+        inspection
+            .dual_cells
+            .iter()
+            .all(|c| c.mask != 0 && c.mask != 0xFF)
+    );
+}
+
+#[test]
+fn inspection_is_opt_in() {
+    let mut world = World::new();
+    world.set_voxel(IVec3::new(4, 4, 4), Voxel::ACTIVE);
+    let nothing = inspect_world(&world, Inspect::NONE);
+    assert!(nothing.dual_graph.is_empty() && nothing.dual_cells.is_empty());
+
+    // A lone voxel has exactly 6 crossed adjacencies — one per face.
+    let graph = inspect_world(
+        &world,
+        Inspect {
+            dual_graph: true,
+            ..Inspect::NONE
+        },
+    );
+    assert_eq!(graph.dual_graph.iter().filter(|e| e.crossed).count(), 6);
+    assert!(graph.dual_cells.is_empty());
 }
 
 // ------------------------------------------------------------ chunk seams

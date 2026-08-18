@@ -1,9 +1,12 @@
 //! Debug renderers, each gated by a compile-time flag in
-//! [`crate::config`]. All of them draw gizmos straight from the voxel
-//! world every frame — deliberately simple, deliberately unoptimised.
+//! [`crate::config`]. Deliberately simple, deliberately unoptimised —
+//! though the marker view merges its geometry, since it scales with the
+//! voxel count rather than with what is on screen.
 
 pub mod dual_cells;
+pub mod dual_graph;
 pub mod grid;
+pub mod inspect;
 pub mod voxel_boxes;
 pub mod voxel_markers;
 
@@ -19,10 +22,16 @@ pub fn plugin(app: &mut App) {
         app.add_systems(Update, voxel_boxes::draw);
     }
     if config::SHOW_VOXEL_MARKERS {
-        app.add_systems(Update, voxel_markers::draw);
+        app.add_systems(Startup, voxel_markers::spawn.after(chunk_render::setup));
+    }
+    // Both dual views read one shared inspection run.
+    if config::SHOW_ACTIVE_CELL_BOXES || config::SHOW_DUAL_GRAPH {
+        app.add_systems(Startup, inspect::collect.after(chunk_render::setup));
     }
     if config::SHOW_ACTIVE_CELL_BOXES {
-        app.add_systems(Startup, dual_cells::collect.after(chunk_render::setup))
-            .add_systems(Update, dual_cells::draw);
+        app.add_systems(Update, dual_cells::draw);
+    }
+    if config::SHOW_DUAL_GRAPH {
+        app.add_systems(Update, dual_graph::draw);
     }
 }
