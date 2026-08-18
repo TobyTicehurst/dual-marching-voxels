@@ -56,7 +56,7 @@ pub(crate) fn setup(
     commands.spawn((
         DirectionalLight {
             illuminance: 12_000.0,
-            shadow_maps_enabled: true,
+            shadow_maps_enabled: config::ENABLE_SHADOWS,
             ..default()
         },
         Transform::from_rotation(Quat::from_euler(EulerRot::XYZ, -1.0, 0.5, 0.0)),

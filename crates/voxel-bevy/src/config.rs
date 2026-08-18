@@ -73,3 +73,8 @@ pub const SURFACE_ALPHA: f32 = 1.0;
 /// this overlays the fill rather than replacing it — use `SURFACE_ALPHA`
 /// to see inside.
 pub const START_WIREFRAME: bool = false;
+/// Cast shadows from the directional light. Off flattens the shading but
+/// keeps small features readable: a cast shadow reads as surface detail
+/// that is not there, and a translucent surface (`SURFACE_ALPHA` below
+/// 1.0) still casts a solid one.
+pub const ENABLE_SHADOWS: bool = false;
