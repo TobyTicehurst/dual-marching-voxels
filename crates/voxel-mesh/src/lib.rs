@@ -3,9 +3,12 @@
 
 pub mod analysis;
 pub mod cube;
+pub mod dmc;
 pub mod mesh_data;
+pub mod mesher;
 pub mod patches;
-pub mod quad_mesh;
+pub mod poly_mesh;
 
 pub use mesh_data::MeshData;
-pub use quad_mesh::QuadMesh;
+pub use mesher::{DualMarchingCubes, Mesher};
+pub use poly_mesh::PolyMesh;
