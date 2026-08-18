@@ -9,7 +9,7 @@ use crate::scene::Scene;
 /// Which scene to build — see [`crate::scene`]. `TestBed` is the small
 /// hand-placed scratch scene for testing one behaviour at a time;
 /// `Landscape` is the full demo.
-pub const SCENE: Scene = Scene::TestBed;
+pub const SCENE: Scene = Scene::Landscape;
 
 /// Outline every chunk's 32³ bounds.
 pub const SHOW_CHUNK_BOUNDS: bool = true;
@@ -39,7 +39,7 @@ pub const ACTIVE_CELL_BOX_MAX_EXTENT: f32 = 4.0;
 
 /// A small solid marker at every active voxel's center, sized to that
 /// voxel — the nodes of the dual graph below.
-pub const SHOW_VOXEL_MARKERS: bool = true;
+pub const SHOW_VOXEL_MARKERS: bool = false;
 pub const VOXEL_MARKER_COLOR: Color = Color::srgb(0.95, 0.6, 0.1);
 /// Marker radius as a fraction of the voxel size (0.5 = touching faces).
 pub const VOXEL_MARKER_RADIUS: f32 = 0.2;
@@ -52,12 +52,12 @@ pub const VOXEL_MARKER_SHAPE: MarkerShape = MarkerShape::Sphere;
 /// The octree's dual graph: an edge between the centers of every pair of
 /// face-adjacent leaves. Crossed edges — where the two leaves differ in
 /// state, so the mesher emits a surface polygon — are highlighted.
-pub const SHOW_DUAL_GRAPH: bool = true;
+pub const SHOW_DUAL_GRAPH: bool = false;
 pub const DUAL_GRAPH_CROSSED_COLOR: Color = Color::srgb(0.2, 1.0, 0.35);
 pub const DUAL_GRAPH_COLOR: Color = Color::srgba(0.5, 0.55, 0.65, 0.5);
 /// Draw the adjacencies that produce no surface, too. Off keeps the view
 /// to just the edges that become polygons.
-pub const DUAL_GRAPH_SHOW_UNCROSSED: bool = true;
+pub const DUAL_GRAPH_SHOW_UNCROSSED: bool = false;
 /// Edges longer than this are not drawn: an adjacency against a large
 /// empty leaf reaches that leaf's center, far outside the interesting
 /// region. (`f32::INFINITY` draws every edge.)
@@ -68,7 +68,7 @@ pub const SHOW_MESHED_SURFACE: bool = true;
 /// Opacity of the meshed surface. Below 1.0 it turns translucent, which
 /// is how the markers and dual graph *inside* the volume stay visible;
 /// set it to 1.0 for an honest look at the shaded result.
-pub const SURFACE_ALPHA: f32 = 0.4;
+pub const SURFACE_ALPHA: f32 = 1.0;
 /// Start with wireframe rendering on (toggle at runtime with F). Note
 /// this overlays the fill rather than replacing it — use `SURFACE_ALPHA`
 /// to see inside.
