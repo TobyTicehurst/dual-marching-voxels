@@ -14,11 +14,18 @@ pub const VOXEL_GRID_COLOR: Color = Color::srgba(0.3, 0.3, 0.3, 0.35);
 
 /// A wireframe box around every *active* voxel, drawn at the voxel's own
 /// scale — the clearest view of the multi-scale octree structure.
-pub const SHOW_ACTIVE_VOXEL_BOXES: bool = false;
+pub const SHOW_ACTIVE_VOXEL_BOXES: bool = true;
 pub const ACTIVE_VOXEL_BOX_COLOR: Color = Color::srgb(0.1, 0.9, 0.9);
 
+/// A box for every active *meshing* cell (dual cell) — the cells the
+/// 256-case table runs on, spanning between voxel centers. Voxel centers
+/// sit on each box's corners, or on its edges/faces where a coarser voxel
+/// fills several corner slots.
+pub const SHOW_ACTIVE_CELL_BOXES: bool = true;
+pub const ACTIVE_CELL_BOX_COLOR: Color = Color::srgb(0.95, 0.2, 0.95);
+
 /// A small sphere at every active voxel's center, scaled to the voxel.
-pub const SHOW_VOXEL_MARKERS: bool = false;
+pub const SHOW_VOXEL_MARKERS: bool = true;
 pub const VOXEL_MARKER_COLOR: Color = Color::srgb(0.95, 0.6, 0.1);
 /// Marker radius as a fraction of the voxel size (0.5 = touching faces).
 pub const VOXEL_MARKER_RADIUS: f32 = 0.35;

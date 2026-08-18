@@ -62,6 +62,32 @@ use crate::poly_mesh::PolyMesh;
 /// Meshes every chunk of the world, seams included, into one mesh with
 /// shared dual vertices. Positions are in world voxel units.
 pub fn mesh_world(world: &World) -> PolyMesh {
+    run_world(world, false).0
+}
+
+/// Inspection data for one *active* dual cell (a meshing cell whose
+/// corner voxels are not all the same state — the cells that produce
+/// surface). For debug rendering and tooling.
+#[derive(Debug, Clone)]
+pub struct DualCellInfo {
+    /// The octree vertex the cell sits at.
+    pub vertex: IVec3,
+    /// Corner-state mask, bit `o` = octant-`o` slot is active.
+    pub mask: u8,
+    /// The 8 slot leaf centers by octant. A coarser leaf filling several
+    /// slots repeats its center, so a cell touching mixed scales is a
+    /// degenerate cube — its bounding box has voxel centers on faces or
+    /// edges rather than corners.
+    pub corners: [Vec3; 8],
+}
+
+/// Runs the same traversal as [`mesh_world`] but returns every active
+/// dual cell instead of the mesh. Debug/inspection only — not optimised.
+pub fn collect_dual_cells(world: &World) -> Vec<DualCellInfo> {
+    run_world(world, true).1
+}
+
+fn run_world(world: &World, collect_cells: bool) -> (PolyMesh, Vec<DualCellInfo>) {
     let side = CHUNK_SIZE as i32;
     let coords = world.chunk_coords();
     mesh_lattice(
@@ -77,6 +103,7 @@ pub fn mesh_world(world: &World) -> PolyMesh {
         },
         &coords,
         side,
+        collect_cells,
     )
 }
 
@@ -100,7 +127,9 @@ pub fn mesh_octree(tree: &Octree, origin: IVec3) -> PolyMesh {
         },
         &[IVec3::ZERO],
         side,
+        false,
     )
+    .0
 }
 
 /// One node plus its actual box. For a pseudo-child (a leaf standing in
@@ -178,14 +207,20 @@ struct Builder {
     mesh: PolyMesh,
     dual_cells: HashMap<IVec3, DualCell>,
     faces: Vec<FaceRec>,
+    /// `Some` when the caller wants [`DualCellInfo`] collected too.
+    cell_info: Option<Vec<DualCellInfo>>,
 }
 
 fn mesh_lattice<'a>(
     root_at: &dyn Fn(IVec3) -> CellRef<&'a Node>,
     coords: &[IVec3],
     side: i32,
-) -> PolyMesh {
-    let mut b = Builder::default();
+    collect_cells: bool,
+) -> (PolyMesh, Vec<DualCellInfo>) {
+    let mut b = Builder {
+        cell_info: collect_cells.then(Vec::new),
+        ..Builder::default()
+    };
 
     // Job keys: every lattice cell/face/edge/vertex incident to an
     // existing chunk, deduplicated. Face (c, n) sits between c and c+eₙ;
@@ -402,6 +437,13 @@ impl Builder {
         if mask == 0 || mask == 0xFF {
             return;
         }
+        if let Some(cells) = &mut self.cell_info {
+            cells.push(DualCellInfo {
+                vertex: q,
+                mask,
+                corners: slots.map(|s| s.center()),
+            });
+        }
         let info = case_info(mask);
         let mut patch_verts = Vec::with_capacity(info.patches.len());
         for &patch in &info.patches {
@@ -480,7 +522,7 @@ impl Builder {
         Some(cell.patch_verts[p as usize])
     }
 
-    fn finish(mut self) -> PolyMesh {
+    fn finish(mut self) -> (PolyMesh, Vec<DualCellInfo>) {
         let faces = std::mem::take(&mut self.faces);
         for f in &faces {
             let (u, v) = tangents(f.axis);
@@ -506,6 +548,6 @@ impl Builder {
             }
             self.mesh.push_face(ids);
         }
-        self.mesh
+        (self.mesh, self.cell_info.unwrap_or_default())
     }
 }

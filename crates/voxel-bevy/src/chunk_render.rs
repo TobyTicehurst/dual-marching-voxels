@@ -16,7 +16,7 @@ pub fn plugin(app: &mut App) {
         .add_systems(Update, toggle_wireframe);
 }
 
-fn setup(
+pub(crate) fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
