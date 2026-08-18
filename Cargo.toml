@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/voxel-core", "crates/voxel-mesh"]
+members = ["crates/voxel-core", "crates/voxel-mesh", "crates/voxel-bevy"]
 
 [workspace.package]
 version = "0.1.0"
@@ -10,5 +10,18 @@ edition = "2024"
 # Kept in lockstep with the glam version Bevy 0.19 re-exports, so mesh data
 # crosses the voxel-core -> voxel-bevy boundary without conversion.
 glam = "0.32"
+# bevy_ci_testing enables bevy_dev_tools::ci_testing::CiTestingPlugin: with a
+# CI_TESTING_CONFIG env var pointing at a RON event script it can screenshot
+# and exit automatically (used to verify the demo renders); without the env
+# var it is inert, so it is safe to leave on for normal runs.
+bevy = { version = "0.19.1", features = ["bevy_ci_testing"] }
 voxel-core = { path = "crates/voxel-core" }
 voxel-mesh = { path = "crates/voxel-mesh" }
+
+# Bevy is unusably slow in unoptimized debug builds; optimize dependencies
+# while keeping fast incremental compiles for the workspace's own code.
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3

@@ -37,8 +37,12 @@ impl PolyMesh {
     pub fn append(&mut self, other: &PolyMesh) {
         let base = u32::try_from(self.positions.len()).expect("PolyMesh overflowed u32 indices");
         self.positions.extend_from_slice(&other.positions);
-        self.faces
-            .extend(other.faces.iter().map(|f| f.iter().map(|i| i + base).collect()));
+        self.faces.extend(
+            other
+                .faces
+                .iter()
+                .map(|f| f.iter().map(|i| i + base).collect()),
+        );
     }
 
     pub fn is_empty(&self) -> bool {

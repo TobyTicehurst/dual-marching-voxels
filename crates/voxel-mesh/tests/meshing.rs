@@ -20,8 +20,14 @@ fn assert_closed(mesh: &PolyMesh, expected_euler: i64, what: &str) {
     assert!(!mesh.is_empty(), "{what}: empty mesh");
     let welded = weld(mesh);
     let stats = edge_stats(&welded);
-    assert_eq!(stats.boundary, 0, "{what}: boundary edges (cracks): {stats:?}");
-    assert_eq!(stats.non_manifold, 0, "{what}: non-manifold edges: {stats:?}");
+    assert_eq!(
+        stats.boundary, 0,
+        "{what}: boundary edges (cracks): {stats:?}"
+    );
+    assert_eq!(
+        stats.non_manifold, 0,
+        "{what}: non-manifold edges: {stats:?}"
+    );
     assert_eq!(
         euler_characteristic(&welded),
         expected_euler,
@@ -78,9 +84,7 @@ fn torus_has_euler_characteristic_zero() {
 fn slab_closes_against_the_world_boundary() {
     // Fills the full chunk footprint up to y = 12: every chunk face it
     // touches is against absent (empty) chunks, which must cap it.
-    let world = world_from_fn(IVec3::ZERO, IVec3::ZERO, |p: IVec3| {
-        Voxel::new(p.y <= 12)
-    });
+    let world = world_from_fn(IVec3::ZERO, IVec3::ZERO, |p: IVec3| Voxel::new(p.y <= 12));
     let mesh = mesh_world(&world);
     assert_closed(&mesh, 2, "slab");
     // 32 × 32 × 13 = 13312 voxels of material. Dual smoothing rounds the
@@ -129,9 +133,15 @@ fn checkerboard_cluster_keeps_all_four_components_apart() {
 #[test]
 fn one_coarse_voxel_is_a_closed_cube() {
     let mut world = World::new();
-    world.chunk_mut(IVec3::ZERO).set_region(IVec3::splat(8), 4, Voxel::ACTIVE);
+    world
+        .chunk_mut(IVec3::ZERO)
+        .set_region(IVec3::splat(8), 4, Voxel::ACTIVE);
     let mesh = mesh_world(&world);
-    assert_eq!(mesh.faces.len(), 6, "one coarse voxel still meshes as one cube");
+    assert_eq!(
+        mesh.faces.len(),
+        6,
+        "one coarse voxel still meshes as one cube"
+    );
     assert_closed(&mesh, 2, "4³ voxel");
     // Centroid placement rounds an isolated cube hard (that's inherent to
     // the Surface-Nets-style simplification), but meshing must be exactly
@@ -184,7 +194,10 @@ fn coarse_slab_under_fine_terrain_transition_is_crack_free() {
                 sizes.insert(size);
             }
         });
-    assert!(sizes.len() > 1, "expected mixed active leaf sizes, got {sizes:?}");
+    assert!(
+        sizes.len() > 1,
+        "expected mixed active leaf sizes, got {sizes:?}"
+    );
 
     let mesh = mesh_world(&world);
     assert_closed(&mesh, 2, "coarse slab + fine steps");

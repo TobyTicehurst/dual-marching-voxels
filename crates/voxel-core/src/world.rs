@@ -98,9 +98,18 @@ mod tests {
 
     #[test]
     fn coordinate_math_handles_negative_positions() {
-        assert_eq!(World::chunk_coord_of(IVec3::new(0, 31, 32)), IVec3::new(0, 0, 1));
-        assert_eq!(World::chunk_coord_of(IVec3::new(-1, -32, -33)), IVec3::new(-1, -1, -2));
-        assert_eq!(World::local_of(IVec3::new(-1, -32, -33)), IVec3::new(31, 0, 31));
+        assert_eq!(
+            World::chunk_coord_of(IVec3::new(0, 31, 32)),
+            IVec3::new(0, 0, 1)
+        );
+        assert_eq!(
+            World::chunk_coord_of(IVec3::new(-1, -32, -33)),
+            IVec3::new(-1, -1, -2)
+        );
+        assert_eq!(
+            World::local_of(IVec3::new(-1, -32, -33)),
+            IVec3::new(31, 0, 31)
+        );
         // origin + local must round-trip to the original position
         let p = IVec3::new(-100, 7, 45);
         assert_eq!(

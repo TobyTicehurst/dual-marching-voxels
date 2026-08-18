@@ -1,0 +1,10 @@
+[package]
+name = "voxel-bevy"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+bevy.workspace = true
+glam.workspace = true
+voxel-core.workspace = true
+voxel-mesh.workspace = true

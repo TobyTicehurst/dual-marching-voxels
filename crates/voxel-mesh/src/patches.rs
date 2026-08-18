@@ -86,7 +86,7 @@ fn build_case(mask: u8) -> CaseInfo {
     let mut patches: Vec<u16> = Vec::new();
     let mut root_to_patch = [NO_PATCH; 12];
     let mut edge_patch = [NO_PATCH; 12];
-    for e in 0..12 {
+    for (e, ep) in edge_patch.iter_mut().enumerate() {
         if crossed & (1 << e) == 0 {
             continue;
         }
@@ -97,9 +97,12 @@ fn build_case(mask: u8) -> CaseInfo {
         }
         let p = root_to_patch[root];
         patches[p as usize] |= 1 << e;
-        edge_patch[e] = p;
+        *ep = p;
     }
-    CaseInfo { patches, edge_patch }
+    CaseInfo {
+        patches,
+        edge_patch,
+    }
 }
 
 struct UnionFind {
@@ -178,7 +181,11 @@ mod tests {
         // one active corner: one triangular patch on that corner's 3 edges
         for corner in 0..8 {
             let info = case_info(1 << corner);
-            assert_eq!(info.patches, vec![corner_edge_mask(corner)], "corner {corner}");
+            assert_eq!(
+                info.patches,
+                vec![corner_edge_mask(corner)],
+                "corner {corner}"
+            );
         }
 
         // two face-adjacent actives: one 4-edge tube
@@ -193,10 +200,7 @@ mod tests {
 
         // two body-diagonal actives: 2 separate corner patches
         let info = case_info(0b1000_0001); // corners 0 and 7
-        assert_eq!(
-            info.patches,
-            vec![corner_edge_mask(0), corner_edge_mask(7)]
-        );
+        assert_eq!(info.patches, vec![corner_edge_mask(0), corner_edge_mask(7)]);
 
         // full bottom face: one flat 4-edge sheet
         let info = case_info(0b0000_1111);
@@ -238,7 +242,9 @@ mod tests {
                         && {
                             let c = face_corners(axis, side);
                             let states: Vec<_> = c.iter().map(|&c| (mask >> c) & 1).collect();
-                            states[0] == states[2] && states[1] == states[3] && states[0] != states[1]
+                            states[0] == states[2]
+                                && states[1] == states[3]
+                                && states[0] != states[1]
                         }
                 })
             });

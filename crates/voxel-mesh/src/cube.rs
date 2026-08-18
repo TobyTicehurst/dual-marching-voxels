@@ -39,7 +39,11 @@ pub const fn edge_axis(edge: usize) -> usize {
 pub fn edge_between(a: usize, b: usize) -> usize {
     let (lo, hi) = if a < b { (a, b) } else { (b, a) };
     let axis = (lo ^ hi).trailing_zeros() as usize;
-    debug_assert_eq!(lo ^ hi, 1 << axis, "corners {a} and {b} are not edge-adjacent");
+    debug_assert_eq!(
+        lo ^ hi,
+        1 << axis,
+        "corners {a} and {b} are not edge-adjacent"
+    );
     // The two bits of `lo` other than `axis`, packed low-to-high, pick the
     // edge within the axis group — matching EDGE_ENDPOINTS' ordering.
     let u = (axis + 1) % 3;

@@ -36,7 +36,10 @@ pub fn sine_terrain(base_height: f32, amplitude: f32, wavelength: f32) -> impl F
         let c = voxel_center(p);
         let h = base_height
             + amplitude * (c.x / wavelength).sin() * (c.z / wavelength).cos()
-            + 0.35 * amplitude * (c.x / (wavelength * 0.31)).cos() * (c.z / (wavelength * 0.43)).sin();
+            + 0.35
+                * amplitude
+                * (c.x / (wavelength * 0.31)).cos()
+                * (c.z / (wavelength * 0.43)).sin();
         Voxel::new(c.y <= h)
     }
 }
@@ -80,7 +83,10 @@ mod tests {
         }
         let expected = 4.0 / 3.0 * std::f32::consts::PI * 1000.0;
         let ratio = active as f32 / expected;
-        assert!((0.9..1.1).contains(&ratio), "sphere volume off: {active} vs {expected}");
+        assert!(
+            (0.9..1.1).contains(&ratio),
+            "sphere volume off: {active} vs {expected}"
+        );
     }
 
     #[test]

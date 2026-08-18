@@ -66,7 +66,9 @@ pub fn mesh_world(world: &World) -> PolyMesh {
     let coords = world.chunk_coords();
     mesh_lattice(
         &|c| {
-            let node: &Node = world.chunk(c).map_or(&EMPTY_NODE, |chunk| chunk.tree().root());
+            let node: &Node = world
+                .chunk(c)
+                .map_or(&EMPTY_NODE, |chunk| chunk.tree().root());
             CellRef {
                 node,
                 min: c * side,
@@ -85,7 +87,11 @@ pub fn mesh_octree(tree: &Octree, origin: IVec3) -> PolyMesh {
     let side = tree.side() as i32;
     mesh_lattice(
         &|c| {
-            let node = if c == IVec3::ZERO { tree.root() } else { &EMPTY_NODE };
+            let node = if c == IVec3::ZERO {
+                tree.root()
+            } else {
+                &EMPTY_NODE
+            };
             CellRef {
                 node,
                 min: origin + c * side,
@@ -434,7 +440,11 @@ impl Builder {
         }
         debug_assert_eq!(neg.min[n] + neg.size, rmin[n], "face plane mismatch");
         debug_assert_eq!(pos.min[n], rmin[n], "face plane mismatch");
-        debug_assert_eq!(rsize, neg.size.min(pos.size), "face rect isn't the smaller leaf's");
+        debug_assert_eq!(
+            rsize,
+            neg.size.min(pos.size),
+            "face rect isn't the smaller leaf's"
+        );
         self.faces.push(FaceRec {
             axis: n,
             rmin,
@@ -450,7 +460,11 @@ impl Builder {
     /// exists.
     fn face_vertex_at(&self, f: &FaceRec, q: IVec3, required: bool) -> Option<u32> {
         let Some(cell) = self.dual_cells.get(&q) else {
-            assert!(!required, "no dual cell at {q} for a crossed face {:?}+{}", f.rmin, f.rsize);
+            assert!(
+                !required,
+                "no dual cell at {q} for a crossed face {:?}+{}",
+                f.rmin, f.rsize
+            );
             return None;
         };
         // Local edge: along the face normal, at tangent slots pointing

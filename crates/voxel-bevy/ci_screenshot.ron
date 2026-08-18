@@ -1,0 +1,5 @@
+(
+    events: [
+        (150, ScreenshotAndExit),
+    ],
+)
