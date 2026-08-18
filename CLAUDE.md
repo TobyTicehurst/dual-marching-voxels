@@ -34,8 +34,8 @@ Dual Marching Cubes, rendered with Bevy.
   `analysis` (weld/edge-stats/Euler/volume used heavily by tests).
 - `crates/voxel-bevy` — demo binary. `config.rs` holds compile-time debug
   flags (chunk bounds, full voxel grid, per-voxel boxes/spheres at their
-  own scale, wireframe). Fly camera: hold RMB to look, WASD+QE, scroll for
-  speed, F for wireframe.
+  own scale, wireframe). Fly camera captures the cursor: mouse to look,
+  WASD+QE, scroll for speed, F for wireframe, Esc to quit.
 
 ## Algorithm cheat-sheet
 

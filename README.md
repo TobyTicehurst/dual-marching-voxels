@@ -29,9 +29,9 @@ cargo test --workspace     # meshing invariants: watertightness, Euler,
 cargo run -p voxel-bevy    # demo scene
 ```
 
-Demo controls: hold **right mouse** to look, **WASD + QE** (or
-Space/Shift) to fly, **scroll** to change speed, **F** to toggle
-wireframe. Debug renderers (chunk bounds, full voxel grid, per-voxel
+Demo controls: the cursor is captured — **mouse** to look, **WASD + QE**
+(or Space/Shift) to fly, **scroll** to change speed, **F** to toggle
+wireframe, **Esc** to quit. Debug renderers (chunk bounds, full voxel grid, per-voxel
 boxes/spheres drawn at each voxel's own scale) are compile-time flags in
 `crates/voxel-bevy/src/config.rs`.
 
