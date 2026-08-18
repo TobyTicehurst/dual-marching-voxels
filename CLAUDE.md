@@ -66,8 +66,12 @@ adjacencies: a polygon over *all* dual cells on the shared face's boundary
 watertight. Traversal is the standard cell/face/edge/vert proc recursion,
 run inside chunks and across chunk roots ("super-octree" seams); absent
 chunks are a canonical empty leaf, which closes the world boundary.
-Ambiguous faces separate diagonal actives: material is 6-connected, empty
-space diagonal-connected.
+Ambiguous faces separate the diagonal *empties*, so material is joined
+through face and edge contacts while empty space is cut apart there. Two
+voxels meeting along an edge therefore mesh as one surface, pinched along
+that edge (an odd Euler characteristic is the signature). Corner-only
+contacts are outside what a face rule can see and stay separate; joining
+them would need a rule about the cell interior.
 
 ## Workflow
 

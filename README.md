@@ -34,7 +34,8 @@ grow the same branching tree one finest-scale voxel at a time, running
 diagonally to the voxel axes so nearly every surface is stair-stepped;
 `Tree` fills in each diagonal step to keep the tree one connected surface,
 while `DiagonalTree` leaves them, so branches break into 56 pieces touching
-only at their corners — the mesher's 6-connected material rule made visible.
+only along edges — which the mesher then joins back up, so the rendered
+tree is whole apart from one corner-only contact it cannot see.
 `TestBed` is a small hand-placed scene for examining one behaviour at a time
 — currently one 4³ voxel with two 2³ voxels on its +x face, the minimal
 octree scale transition — and `Landscape` is the full terrain-and-objects
@@ -67,7 +68,9 @@ combinatorial corners being the surrounding leaves (a coarser leaf fills
 several corner slots). Per cell, a generated 256-case table groups the
 crossed edges into surface patches — two crossed edges join when a face's
 surface segment connects them, with ambiguous faces resolved so material
-is 6-connected. Each patch gets one dual vertex at the centroid of its
+is joined through face and edge contacts (a pair meeting along an edge
+meshes as one pinched surface; corner-only contacts stay separate). Each
+patch gets one dual vertex at the centroid of its
 crossings; a crossing sits at the center of the face the two leaves share
 (the one interpolation richer voxel data would change). Using the shared
 face keeps the surface independent of how *empty* space happens to be

@@ -10,11 +10,15 @@
 //! from corner states, and two crossed edges are in the same patch iff
 //! they are joined by a surface segment on some face. A face with 4
 //! crossed edges (diagonally opposite active corners) is ambiguous; the
-//! fixed rule here pairs the segments so the **active corners are
-//! separated**. That makes active material face-connected (6-connectivity)
-//! — two voxels touching only along a diagonal get separate surface
-//! sheets — and, because the rule depends only on the face's own corner
-//! states, the two cells sharing any face always agree on it.
+//! fixed rule here pairs the segments so the **empty corners are
+//! separated**, which joins the active ones. Material is therefore
+//! edge-connected — two voxels meeting along an edge mesh as one surface —
+//! while empty space is cut apart there. Corner-only contacts are a
+//! different matter: no face sees both voxels, so a body diagonal is still
+//! two separate pieces.
+//!
+//! Whatever the rule, it must depend only on the face's own corner states,
+//! since that is what makes the two cells sharing a face agree on it.
 
 use std::sync::OnceLock;
 
@@ -70,10 +74,10 @@ fn build_case(mask: u8) -> CaseInfo {
                 2 => uf.union(face_crossed[0], face_crossed[1]),
                 4 => {
                     // Alternating states around the cycle: join the two
-                    // edges flanking each *active* corner, cutting the
-                    // active corners apart.
+                    // edges flanking each *empty* corner, cutting those
+                    // apart and so connecting the active ones.
                     for (i, &c) in corners.iter().enumerate() {
-                        if (mask >> c) & 1 == 1 {
+                        if (mask >> c) & 1 == 0 {
                             uf.union(cycle_edges[(i + 3) % 4], cycle_edges[i]);
                         }
                     }
@@ -192,13 +196,15 @@ mod tests {
         let info = case_info(0b0000_0011); // corners 0 and 1
         assert_eq!(info.patches.len(), 1);
         assert_eq!(info.patches[0].count_ones(), 4);
-
-        // two face-diagonal actives (share a face, not an edge): 2 patches
+        // Two actives meeting along an edge: the ambiguous faces are
+        // resolved to join them, so their caps merge into one 6-edge tube
+        // rather than two triangles.
         let info = case_info(0b0000_1001); // corners 0 and 3
-        assert_eq!(info.patches.len(), 2);
-        assert!(info.patches.iter().all(|p| p.count_ones() == 3));
+        assert_eq!(info.patches.len(), 1);
+        assert_eq!(info.patches[0].count_ones(), 6);
 
-        // two body-diagonal actives: 2 separate corner patches
+        // two body-diagonal actives: 2 separate corner patches, since no
+        // face sees both corners for the rule to act on
         let info = case_info(0b1000_0001); // corners 0 and 7
         assert_eq!(info.patches, vec![corner_edge_mask(0), corner_edge_mask(7)]);
 
@@ -207,23 +213,24 @@ mod tests {
         assert_eq!(info.patches.len(), 1);
         assert_eq!(info.patches[0].count_ones(), 4);
 
-        // checkerboard (4 mutually diagonal actives): 4 separate patches
-        let info = case_info(0b0110_1001); // corners 0, 3, 5, 6
+        // Checkerboard: still 4 caps, but now around the *empty* corners
+        // rather than the active ones — the material is joined through
+        // every ambiguous face and the empty space is what gets cut apart.
+        let info = case_info(0b0110_1001); // active 0, 3, 5, 6
         assert_eq!(info.patches.len(), 4);
-        for corner in [0usize, 3, 5, 6] {
+        for corner in [1usize, 2, 4, 7] {
             assert!(
                 info.patches.contains(&corner_edge_mask(corner)),
-                "missing patch for corner {corner}"
+                "missing patch for empty corner {corner}"
             );
         }
 
-        // complement of the face-diagonal case: the two empty diagonal
-        // corners *connect* (empty space is diagonal-connected under the
-        // separate-the-actives rule), so their caps merge into one 6-edge
-        // tube rather than two triangles
+        // Complement of the edge-touching case: now it is the two *empty*
+        // diagonal corners that get separated, so this splits into two
+        // triangles where the original merged into a tube.
         let info = case_info(!0b0000_1001);
-        assert_eq!(info.patches.len(), 1);
-        assert_eq!(info.patches[0].count_ones(), 6);
+        assert_eq!(info.patches.len(), 2);
+        assert!(info.patches.iter().all(|p| p.count_ones() == 3));
     }
 
     #[test]

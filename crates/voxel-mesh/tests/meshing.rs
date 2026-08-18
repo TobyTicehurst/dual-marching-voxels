@@ -93,22 +93,46 @@ fn slab_closes_against_the_world_boundary() {
     let vol = signed_volume(&mesh);
     assert!((8500.0..13800.0).contains(&vol), "slab volume {vol}");
 }
-
+/// Two voxels meeting along an edge now mesh as **one** surface: the
+/// ambiguous faces between them are resolved to join the material.
+///
+/// The join is a pinch. Both voxels reach the shared edge and nothing
+/// thickens the contact, so two sheets of surface meet along it and that
+/// one edge carries four faces instead of two. This is inherent to
+/// connecting an edge contact in a dual mesh, not a defect in the
+/// traversal — the surface is still closed, and every other edge is
+/// manifold.
 #[test]
-fn face_diagonal_voxels_stay_two_separate_closed_surfaces() {
-    // Two voxels touching only along a diagonal: Surface Nets would pinch
-    // them together at a shared vertex; DMC's per-patch vertices must keep
-    // two disjoint closed cubes (Euler 2 + 2 = 4, no non-manifold edges).
+fn edge_touching_voxels_mesh_as_one_pinched_surface() {
     let mut world = World::new();
     world.set_voxel(IVec3::new(4, 4, 4), Voxel::ACTIVE);
     world.set_voxel(IVec3::new(5, 5, 4), Voxel::ACTIVE);
     let mesh = mesh_world(&world);
     assert_eq!(mesh.faces.len(), 12);
-    assert_closed(&mesh, 4, "face-diagonal pair");
+
+    let welded = weld(&mesh);
+    let stats = edge_stats(&welded);
+    assert_eq!(stats.boundary, 0, "the surface must stay closed: {stats:?}");
+    assert_eq!(
+        stats.non_manifold, 1,
+        "exactly one pinched edge, at the contact itself: {stats:?}"
+    );
+    // Two closed sheets glued along one edge: 2 + 2 - 1. An odd Euler
+    // characteristic is itself the signature of the pinch — a closed
+    // manifold surface can never have one.
+    assert_eq!(
+        euler_characteristic(&welded),
+        3,
+        "expected one pinched piece"
+    );
 }
 
+/// Corner-only contacts are untouched by the face rule: no single face
+/// sees both voxels, so there is no ambiguous face to resolve and the two
+/// stay separate closed cubes. Connecting these would need a rule about
+/// the cell interior instead.
 #[test]
-fn body_diagonal_voxels_stay_separate_too() {
+fn body_diagonal_voxels_stay_separate() {
     let mut world = World::new();
     world.set_voxel(IVec3::new(4, 4, 4), Voxel::ACTIVE);
     world.set_voxel(IVec3::new(5, 5, 5), Voxel::ACTIVE);
@@ -117,16 +141,19 @@ fn body_diagonal_voxels_stay_separate_too() {
 }
 
 #[test]
-fn checkerboard_cluster_keeps_all_four_components_apart() {
-    // Four mutually diagonal voxels of a 2×2×2 block — the hardest
-    // ambiguous configuration (checkerboard case) at every shared cell.
+fn checkerboard_cluster_meshes_as_a_single_blob() {
+    // Four mutually edge-touching voxels of a 2×2×2 block — the hardest
+    // ambiguous configuration, every shared cell alternating. They all
+    // meet around the block's center, so joining them yields one closed
+    // surface with no handles (and no pinch: the junction is a volume,
+    // not a single edge).
     let mut world = World::new();
     for o in [0b000usize, 0b011, 0b101, 0b110] {
         let p = IVec3::new((o & 1) as i32, ((o >> 1) & 1) as i32, ((o >> 2) & 1) as i32);
         world.set_voxel(IVec3::splat(8) + p, Voxel::ACTIVE);
     }
     let mesh = mesh_world(&world);
-    assert_closed(&mesh, 8, "checkerboard");
+    assert_closed(&mesh, 2, "checkerboard");
 }
 
 // ------------------------------------------------------------ mixed scale

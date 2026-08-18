@@ -24,8 +24,8 @@ pub enum Scene {
     /// diagonal directions, kept connected by filling every diagonal step.
     Tree,
     /// The same tree with those steps left unfilled, so branches break
-    /// into pieces touching only at corners — what 6-connected material
-    /// means, and what to watch while changing that rule.
+    /// into pieces touching along edges — which the mesher now joins, so
+    /// this shows the join, and the one corner contact it cannot see.
     DiagonalTree,
 }
 
@@ -137,19 +137,19 @@ fn landscape() -> World {
 /// Branches are walked as 1-voxel-thick curved paths in freely chosen
 /// directions rather than along the axes, so nearly every surface is
 /// stair-stepped and the mesher meets diagonal configurations constantly
-/// — the ambiguous cases, where material has to stay 6-connected while
-/// empty space connects diagonally. Nothing here calls `set_region`, and
+/// — the ambiguous cases, where the patch table decides whether material
+/// or empty space is the one that stays connected. Nothing here calls `set_region`, and
 /// the paths are thin enough that no aligned 2³ block ever fills, so the
 /// octree keeps every voxel at size 1 (asserted in the tests below).
 ///
 /// `fill_diagonal_steps` decides what happens when the path crosses two
 /// voxel planes within one step, leaving two voxels that touch only along
-/// an edge. Filling the corner in keeps the tree a single connected
-/// surface; leaving it produces [`Scene::DiagonalTree`], where those
-/// branches break into pieces floating at each other's corners — the
-/// mesher's 6-connected material rule made visible, and the thing to look
-/// at while changing that rule. Both scenes grow the *same* tree, so they
-/// differ only in those joints.
+/// an edge. Filling the corner in makes the tree face-connected, which no
+/// meshing rule can argue with; leaving it produces
+/// [`Scene::DiagonalTree`], whose voxels are joined only along those
+/// edges — so it shows what the patch table does with edge contacts, and
+/// is the scene to watch while changing that. Both scenes grow the *same*
+/// tree, so they differ only in those joints.
 fn tree(fill_diagonal_steps: bool) -> World {
     let mut world = World::new();
     let mut rng = Rng(0x51ED_BEEF);
@@ -274,9 +274,12 @@ mod tests {
             .collect()
     }
 
-    /// Number of face-connected ("6-connected") components — the same
-    /// notion of connectedness the mesher uses for material.
-    fn connected_pieces(solid: &std::collections::HashSet<IVec3>) -> usize {
+    /// Number of connected components, where two voxels count as joined
+    /// when they differ on at most `axes` axes: 1 is face contact only, 2
+    /// also counts edge contacts, 3 also counts corner contacts. The
+    /// mesher currently joins material through face *and* edge contacts,
+    /// so 2 is the notion that matches what gets meshed.
+    fn connected_pieces(solid: &std::collections::HashSet<IVec3>, axes: i32) -> usize {
         let mut unvisited = solid.clone();
         let mut pieces = 0;
         while let Some(&start) = unvisited.iter().next() {
@@ -284,12 +287,14 @@ mod tests {
             let mut queue = vec![start];
             unvisited.remove(&start);
             while let Some(p) = queue.pop() {
-                for axis in 0..3 {
-                    for step in [-1, 1] {
-                        let mut neighbour = p;
-                        neighbour[axis] += step;
-                        if unvisited.remove(&neighbour) {
-                            queue.push(neighbour);
+                for dx in -1i32..=1 {
+                    for dy in -1i32..=1 {
+                        for dz in -1i32..=1 {
+                            let d = IVec3::new(dx, dy, dz);
+                            let steps = dx.abs() + dy.abs() + dz.abs();
+                            if (1..=axes).contains(&steps) && unvisited.remove(&(p + d)) {
+                                queue.push(p + d);
+                            }
                         }
                     }
                 }
@@ -359,26 +364,28 @@ mod tests {
         );
     }
 
-    /// A branch that stepped diagonally would mesh as separate floating
-    /// pieces, since the mesher keeps material 6-connected. The tree has
-    /// to be a single face-connected component.
+    /// The connected variant fills every diagonal step, so it stands on
+    /// its own regardless of how the mesher treats edge contacts: it must
+    /// be a single face-connected component.
     #[test]
     fn the_tree_is_one_connected_piece() {
         let solid = solid_voxels(Scene::Tree);
         assert_eq!(
-            connected_pieces(&solid),
+            connected_pieces(&solid, 1),
             1,
             "the tree broke apart: filling the diagonal steps should leave \
              exactly one face-connected piece"
         );
     }
 
-    /// The point of `DiagonalTree`: the same tree with its diagonal steps
-    /// left unfilled, so the mesher — which keeps material 6-connected —
-    /// renders those joints as separate closed pieces floating at each
-    /// other's corners.
+    /// `DiagonalTree` is the same tree with its diagonal steps left
+    /// unfilled, so its voxels come apart into pieces that touch only
+    /// along edges. The mesher joins material through edge contacts, so
+    /// the *rendered* tree is whole again — what this scene now shows is
+    /// the join itself, and it is the scene to watch if that rule changes
+    /// again (a corner-only contact would still leave a visible gap).
     #[test]
-    fn the_diagonal_tree_breaks_into_pieces_at_its_diagonal_joints() {
+    fn the_diagonal_tree_is_broken_in_voxels_but_joined_by_the_mesher() {
         let diagonal = solid_voxels(Scene::DiagonalTree);
         let connected = solid_voxels(Scene::Tree);
 
@@ -389,9 +396,24 @@ mod tests {
             "the diagonal tree must be finest-scale too"
         );
         assert!(
-            connected_pieces(&diagonal) > 1,
+            connected_pieces(&diagonal, 1) > 1,
             "the diagonal tree is supposed to come apart, but it is one piece"
         );
+        // The mesher joins material through edge contacts as well as face
+        // ones, so nearly every one of those breaks is closed in the
+        // rendered mesh — but one joint in this tree is a corner-only
+        // contact, which no face rule can see, and it stays a visible gap.
+        assert_eq!(
+            connected_pieces(&diagonal, 2),
+            2,
+            "expected exactly one corner-only joint left unjoined"
+        );
+        assert_eq!(
+            connected_pieces(&diagonal, 3),
+            1,
+            "and that last joint should be a corner contact, not a real gap"
+        );
+
         // Same tree, minus the corner voxels that filling adds: the two
         // scenes must differ only at those joints.
         assert!(
