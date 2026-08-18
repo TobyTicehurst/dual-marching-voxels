@@ -22,7 +22,7 @@ pub const VOXEL_GRID_COLOR: Color = Color::srgba(0.3, 0.3, 0.3, 0.35);
 
 /// A wireframe box around every *active* voxel, drawn at the voxel's own
 /// scale — the clearest view of the multi-scale octree structure.
-pub const SHOW_ACTIVE_VOXEL_BOXES: bool = true;
+pub const SHOW_ACTIVE_VOXEL_BOXES: bool = false;
 pub const ACTIVE_VOXEL_BOX_COLOR: Color = Color::srgb(0.1, 0.9, 0.9);
 
 /// A box for every active *meshing* cell (dual cell) — the cells the

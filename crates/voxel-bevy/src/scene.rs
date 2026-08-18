@@ -76,6 +76,13 @@ fn test_bed() -> World {
     chunk.set_region(IVec3::new(16, 12, 12), 2, Voxel::ACTIVE);
     chunk.set_region(IVec3::new(16, 14, 12), 2, Voxel::ACTIVE);
 
+    // The large voxel: 4³, occupying x/y/z 12..16.
+    chunk.set_region(IVec3::new(12, 16, 12), 4, Voxel::ACTIVE);
+
+    // The large voxel: 4³, occupying x/y/z 12..16.
+    chunk.set_region(IVec3::new(16, 16, 12), 4, Voxel::ACTIVE);
+
+
     world
 }
 
