@@ -38,7 +38,8 @@ Dual Marching Cubes, rendered with Bevy.
 - `crates/voxel-bevy` — demo binary. `config.rs` holds compile-time
   choices: `SCENE` picks a scene from `scene.rs` (`TestBed`, the small
   hand-placed scratch scene for testing one behaviour at a time — put new
-  experiments there; or `Landscape`, the full demo), plus debug flags
+  experiments there; `Tree`, a diagonal-heavy tree grown entirely from
+  finest-scale voxels; or `Landscape`, the full demo), plus debug flags
   (chunk bounds, full voxel grid, per-voxel boxes at their own scale,
   solid voxel-center markers, and the two views fed by one
   `dmc::inspect_world` run — active meshing-cell boxes and the dual
