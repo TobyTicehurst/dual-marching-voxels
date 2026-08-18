@@ -68,10 +68,22 @@ run inside chunks and across chunk roots ("super-octree" seams); absent
 chunks are a canonical empty leaf, which closes the world boundary.
 Ambiguous faces separate the diagonal *empties*, so material is joined
 through face and edge contacts while empty space is cut apart there. Two
-voxels meeting along an edge therefore mesh as one surface, pinched along
-that edge (an odd Euler characteristic is the signature). Corner-only
+voxels meeting along an edge therefore mesh as one surface. Corner-only
 contacts are outside what a face rule can see and stay separate; joining
 them would need a rule about the cell interior.
+
+The output is the full dual of the MC surface on three levels: patch →
+vertex, face **segment** → mesh edge, crossing → polygon. The middle one
+matters: where a patch swallows all four crossings of an ambiguous face
+(exactly the edge contacts — 36 of the 256 cases), that face's two
+segments run between the same pair of patch vertices, so two mesh edges
+collapse into one shared by four polygons — a pinch. Those segments get a
+vertex of their own, at the centroid of their two crossings, turning the
+collapsed edge into a small throat. This is Proposition 1 of Manifold
+Dual Contouring (Schaefer/Ju/Warren); its other condition — every patch a
+disk — already holds for all 256 cases. **The mesh is closed and
+2-manifold; keep it that way**: `non_manifold == 0` on every scene and
+test shape, and an odd Euler characteristic means a pinch is back.
 
 ## Workflow
 

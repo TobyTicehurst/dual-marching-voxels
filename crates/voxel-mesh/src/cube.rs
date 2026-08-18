@@ -66,6 +66,12 @@ pub fn face_corners(axis: usize, side: usize) -> [usize; 4] {
     ]
 }
 
+/// Index of the face `bit(axis) == side` in the cube's 6-face ordering,
+/// used to key per-face data in the patch table.
+pub const fn face_index(axis: usize, side: usize) -> usize {
+    axis * 2 + side
+}
+
 /// Offset of corner `i` scaled by `size` — where the corner sits for a
 /// cell of that size.
 pub fn corner_pos(min: IVec3, size: i32, corner: usize) -> IVec3 {
