@@ -1,8 +1,9 @@
-//! A minimal fly camera: hold right mouse to look, WASD + QE to move,
-//! scroll wheel to change speed. No cursor grabbing needed.
+//! A minimal fly camera: the cursor is captured and mouse movement looks
+//! around; WASD + QE to move, scroll wheel to change speed, Esc to quit.
 
 use bevy::input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll};
 use bevy::prelude::*;
+use bevy::window::{CursorGrabMode, CursorOptions, WindowFocused};
 
 use crate::scene;
 
@@ -15,8 +16,8 @@ pub struct FlyCamera {
 }
 
 pub fn plugin(app: &mut App) {
-    app.add_systems(Startup, spawn_camera)
-        .add_systems(Update, fly);
+    app.add_systems(Startup, (spawn_camera, grab_cursor))
+        .add_systems(Update, (fly, regrab_on_focus, exit_on_esc));
 }
 
 fn spawn_camera(mut commands: Commands) {
@@ -42,10 +43,39 @@ fn spawn_camera(mut commands: Commands) {
     ));
 }
 
+fn grab_cursor(mut windows: Query<&mut CursorOptions>) {
+    for mut cursor in &mut windows {
+        cursor.grab_mode = CursorGrabMode::Locked;
+        cursor.visible = false;
+    }
+}
+
+/// The OS releases the cursor when the window loses focus; re-apply the
+/// grab when focus returns (touching the component re-triggers the lock).
+fn regrab_on_focus(
+    mut focus_events: MessageReader<WindowFocused>,
+    mut windows: Query<&mut CursorOptions>,
+) {
+    for event in focus_events.read() {
+        if event.focused
+            && let Ok(mut cursor) = windows.get_mut(event.window)
+        {
+            cursor.set_changed();
+            cursor.grab_mode = CursorGrabMode::Locked;
+            cursor.visible = false;
+        }
+    }
+}
+
+fn exit_on_esc(keys: Res<ButtonInput<KeyCode>>, mut commands: Commands) {
+    if keys.just_pressed(KeyCode::Escape) {
+        commands.write_message(AppExit::Success);
+    }
+}
+
 fn fly(
     time: Res<Time>,
     keys: Res<ButtonInput<KeyCode>>,
-    buttons: Res<ButtonInput<MouseButton>>,
     motion: Res<AccumulatedMouseMotion>,
     scroll: Res<AccumulatedMouseScroll>,
     mut cameras: Query<(&mut Transform, &mut FlyCamera)>,
@@ -58,7 +88,7 @@ fn fly(
         cam.speed = (cam.speed * 1.15f32.powf(scroll.delta.y)).clamp(1.0, 500.0);
     }
 
-    if buttons.pressed(MouseButton::Right) && motion.delta != Vec2::ZERO {
+    if motion.delta != Vec2::ZERO {
         cam.yaw -= motion.delta.x * cam.sensitivity;
         cam.pitch = (cam.pitch - motion.delta.y * cam.sensitivity).clamp(-1.54, 1.54);
         transform.rotation = Quat::from_euler(EulerRot::YXZ, cam.yaw, cam.pitch, 0.0);

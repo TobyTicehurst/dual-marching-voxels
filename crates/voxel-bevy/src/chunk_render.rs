@@ -56,7 +56,7 @@ fn setup(
         Transform::from_rotation(Quat::from_euler(EulerRot::XYZ, -1.0, 0.5, 0.0)),
     ));
 
-    info!("controls: hold right mouse to look, WASD + QE to fly, scroll = speed, F = wireframe");
+    info!("controls: mouse to look, WASD + QE to fly, scroll = speed, F = wireframe, Esc = quit");
 }
 
 fn toggle_wireframe(keys: Res<ButtonInput<KeyCode>>, mut wireframe: ResMut<WireframeConfig>) {
