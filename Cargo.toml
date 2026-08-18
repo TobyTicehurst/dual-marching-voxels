@@ -1,0 +1,14 @@
+[workspace]
+resolver = "3"
+members = ["crates/voxel-core", "crates/voxel-mesh"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+
+[workspace.dependencies]
+# Kept in lockstep with the glam version Bevy 0.19 re-exports, so mesh data
+# crosses the voxel-core -> voxel-bevy boundary without conversion.
+glam = "0.32"
+voxel-core = { path = "crates/voxel-core" }
+voxel-mesh = { path = "crates/voxel-mesh" }

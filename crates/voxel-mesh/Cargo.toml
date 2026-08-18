@@ -1,0 +1,8 @@
+[package]
+name = "voxel-mesh"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+glam.workspace = true
+voxel-core.workspace = true
