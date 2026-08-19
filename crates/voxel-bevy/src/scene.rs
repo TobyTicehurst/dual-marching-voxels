@@ -48,12 +48,12 @@ pub fn build_world(scene: Scene) -> World {
 
 pub fn camera_start(scene: Scene) -> CameraStart {
     match scene {
-        // framed on the voxel cluster below, which spans x 12..18,
-        // y 12..16, z 12..16
+        // close in on the two voxels below, which span x/y 15..17,
+        // z 16..17, and meet along the line x = y = 16
         Scene::TestBed => CameraStart {
-            eye: Vec3::new(23.0, 19.0, 23.0),
-            target: Vec3::new(15.0, 14.0, 14.0),
-            speed: 6.0,
+            eye: Vec3::new(21.0, 20.0, 22.0),
+            target: Vec3::new(16.0, 16.0, 16.5),
+            speed: 3.0,
         },
         Scene::Tree | Scene::DiagonalTree => CameraStart {
             eye: Vec3::new(100.0, 44.0, 100.0),
@@ -72,29 +72,23 @@ pub fn camera_start(scene: Scene) -> CameraStart {
 /// behaviour at a time. Everything sits in a single chunk near its middle
 /// so nothing touches a chunk seam.
 ///
-/// Right now: one 4³ voxel with two 2³ voxels on its +x face. The pair
-/// covers half that face (the `z 12..14` strip), so the transition shows
-/// both halves of the interesting case at once — where the coarse face is
-/// met by finer voxels, and where it stays exposed. The dual cells along
-/// the coarse voxel's face boundary are the "hanging" ones that turn the
-/// dual face into an n-gon rather than a quad, which is what keeps the
-/// mesh crack-free. `debug::dual_cells` draws them.
+/// Right now: **two finest-scale voxels diagonally across a cell edge**,
+/// the minimal case of an edge contact. They share only the line
+/// `x = 16, y = 16, z ∈ 16..17` — no face — so every dual cell that sees
+/// both of them has them on a face diagonal, which is the ambiguous
+/// marching-cubes configuration. The rule in `voxel_mesh::patches`
+/// resolves it by separating the diagonal *empties*, joining the two
+/// voxels into one surface.
+///
+/// Two dual cells straddle the contact, at `(16, 16, 16)` and
+/// `(16, 16, 17)`; turn on `SHOW_ACTIVE_CELL_BOXES` and `SHOW_DUAL_GRAPH`
+/// in `config` to see them and the adjacencies they join.
 fn test_bed() -> World {
     let mut world = World::new();
     let chunk = world.chunk_mut(IVec3::ZERO);
 
-    // The large voxel: 4³, occupying x/y/z 12..16.
-    chunk.set_region(IVec3::new(12, 12, 12), 4, Voxel::ACTIVE);
-
-    // Two half-scale (2³) voxels stacked in y on its +x face.
-    chunk.set_region(IVec3::new(16, 12, 12), 2, Voxel::ACTIVE);
-    chunk.set_region(IVec3::new(16, 14, 12), 2, Voxel::ACTIVE);
-
-    // The large voxel: 4³, occupying x/y/z 12..16.
-    chunk.set_region(IVec3::new(12, 16, 12), 4, Voxel::ACTIVE);
-
-    // The large voxel: 4³, occupying x/y/z 12..16.
-    chunk.set_region(IVec3::new(16, 16, 12), 4, Voxel::ACTIVE);
+    chunk.set(IVec3::new(15, 15, 16), Voxel::ACTIVE);
+    chunk.set(IVec3::new(16, 16, 16), Voxel::ACTIVE);
 
     world
 }

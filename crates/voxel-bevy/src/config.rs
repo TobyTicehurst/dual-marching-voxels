@@ -10,7 +10,7 @@ use crate::scene::Scene;
 /// hand-placed scratch scene for testing one behaviour at a time, `Tree` a
 /// diagonal-heavy tree of finest-scale voxels, `DiagonalTree` that same
 /// tree left broken at its diagonal joints, and `Landscape` the full demo.
-pub const SCENE: Scene = Scene::DiagonalTree;
+pub const SCENE: Scene = Scene::TestBed;
 
 /// Outline every chunk's 32³ bounds.
 pub const SHOW_CHUNK_BOUNDS: bool = true;
@@ -23,7 +23,7 @@ pub const VOXEL_GRID_COLOR: Color = Color::srgba(0.3, 0.3, 0.3, 0.35);
 
 /// A wireframe box around every *active* voxel, drawn at the voxel's own
 /// scale — the clearest view of the multi-scale octree structure.
-pub const SHOW_ACTIVE_VOXEL_BOXES: bool = false;
+pub const SHOW_ACTIVE_VOXEL_BOXES: bool = true;
 pub const ACTIVE_VOXEL_BOX_COLOR: Color = Color::srgb(0.1, 0.9, 0.9);
 
 /// A box for every active *meshing* cell (dual cell) — the cells the

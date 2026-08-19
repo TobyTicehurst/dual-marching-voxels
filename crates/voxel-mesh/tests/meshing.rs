@@ -200,10 +200,9 @@ fn coarse_voxel_next_to_fine_voxel_meshes_crack_free() {
     assert!(signed_volume(&mesh) > 0.0);
 }
 
-/// The voxel-bevy `TestBed` scene: one 4³ voxel with two 2³ voxels on
-/// its +x face, covering half of it. The half-covered coarse face is the
-/// case that needs hanging dual cells in its polygon, so this pins the
-/// demo scene's geometry as well as the behaviour.
+/// One 4³ voxel with two 2³ voxels on its +x face, covering half of it.
+/// The half-covered coarse face is the case that needs hanging dual cells
+/// in its polygon.
 #[test]
 fn coarse_voxel_with_two_half_scale_neighbours_is_watertight() {
     let mut world = World::new();

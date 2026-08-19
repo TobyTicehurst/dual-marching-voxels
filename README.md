@@ -37,8 +37,8 @@ while `DiagonalTree` leaves them, so branches break into 56 pieces touching
 only along edges — which the mesher then joins back up, so the rendered
 tree is whole apart from one corner-only contact it cannot see.
 `TestBed` is a small hand-placed scene for examining one behaviour at a time
-— currently one 4³ voxel with two 2³ voxels on its +x face, the minimal
-octree scale transition — and `Landscape` is the full terrain-and-objects
+— currently two finest-scale voxels diagonally across a cell edge, the
+minimal edge contact — and `Landscape` is the full terrain-and-objects
 demo. Add new experiments to `scene::test_bed`.
 
 Demo controls: the cursor is captured — **mouse** to look, **WASD + QE**
