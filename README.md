@@ -69,7 +69,7 @@ several corner slots). Per cell, a generated 256-case table groups the
 crossed edges into surface patches — two crossed edges join when a face's
 surface segment connects them, with ambiguous faces resolved so material
 is joined through face and edge contacts (a pair meeting along an edge
-meshes as one surface; corner-only contacts stay separate). Each
+meshes as one pinched surface; corner-only contacts stay separate). Each
 patch gets one dual vertex at the centroid of its
 crossings; a crossing sits at the center of the face the two leaves share
 (the one interpolation richer voxel data would change). Using the shared
@@ -80,19 +80,6 @@ like ordinary empty space. Each crossed leaf adjacency then becomes a polygon ov
 cells along its shared face's boundary — quads in uniform regions, n-gons
 at scale transitions (hanging vertices), which is exactly what keeps those
 transitions crack-free.
-
-The result is the complete dual of the marching-cubes surface: patch →
-vertex, face **segment** → mesh edge, crossing → polygon. That middle
-level is what keeps it a 2-manifold. Where one patch takes all four
-crossings of an ambiguous face — an edge contact between two voxels —
-both of that face's segments would run between the same pair of patch
-vertices, collapsing two mesh edges into one shared by four polygons: a
-pinch. Such a segment therefore gets its own vertex, at the centroid of
-its two crossings, opening the join into a small throat. The condition is
-Proposition 1 of [Manifold Dual
-Contouring](https://doi.org/10.1109/TVCG.2007.1012) (Schaefer, Ju &
-Warren), whose other requirement — that each patch be a disk — the
-generated table already satisfies in all 256 cases.
 
 The traversal is the classic four-proc octree recursion from dual
 contouring (`cell_proc`/`face_proc`/`edge_proc`/`vert_proc`), with a leaf

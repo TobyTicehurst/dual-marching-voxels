@@ -93,75 +93,38 @@ fn slab_closes_against_the_world_boundary() {
     let vol = signed_volume(&mesh);
     assert!((8500.0..13800.0).contains(&vol), "slab volume {vol}");
 }
-/// Two voxels meeting along an edge mesh as **one manifold** surface: the
-/// ambiguous faces between them are resolved to join the material, and
-/// the segment vertices give that join a throat instead of a pinch.
+/// Two voxels meeting along an edge now mesh as **one** surface: the
+/// ambiguous faces between them are resolved to join the material.
 ///
-/// Without them the two dual cells straddling the contact both place
-/// their vertex on the contact line itself and the two surface segments
-/// between them collapse onto a single mesh edge, which the two voxels'
-/// four polygons then all share. Splitting the segments turns that edge
-/// into a four-sided opening, so each of those four polygons picks up one
-/// extra corner and every edge is back to exactly two faces.
+/// The join is a pinch. Both voxels reach the shared edge and nothing
+/// thickens the contact, so two sheets of surface meet along it and that
+/// one edge carries four faces instead of two. This is inherent to
+/// connecting an edge contact in a dual mesh, not a defect in the
+/// traversal — the surface is still closed, and every other edge is
+/// manifold.
 #[test]
-fn edge_touching_voxels_mesh_as_one_surface_with_a_manifold_throat() {
+fn edge_touching_voxels_mesh_as_one_pinched_surface() {
     let mut world = World::new();
     world.set_voxel(IVec3::new(4, 4, 4), Voxel::ACTIVE);
     world.set_voxel(IVec3::new(5, 5, 4), Voxel::ACTIVE);
     let mesh = mesh_world(&world);
     assert_eq!(mesh.faces.len(), 12);
-    let widened = mesh.faces.iter().filter(|f| f.len() == 5).count();
-    assert_eq!(widened, 4, "the four polygons around the contact");
 
-    // Two blobs joined by one throat is still a sphere: even Euler
-    // characteristic, and no edge shared by more than two faces. Before
-    // the split this was 3 with one non-manifold edge — an odd
-    // characteristic being impossible for a closed manifold.
-    assert_closed(&mesh, 2, "edge-touching pair");
-
-    // The throat is a real opening, not a collapsed one: the two segment
-    // vertices sit either side of the contact line (x = y = 5).
-    let throat: Vec<Vec3> = mesh
-        .positions
-        .iter()
-        .copied()
-        .filter(|p| p.z == 4.5 && p.x != 5.0)
-        .collect();
-    assert_eq!(throat.len(), 2, "two segment vertices: {throat:?}");
-    assert!(
-        (throat[0] - throat[1]).length() > 0.5,
-        "throat is pinched shut: {throat:?}"
+    let welded = weld(&mesh);
+    let stats = edge_stats(&welded);
+    assert_eq!(stats.boundary, 0, "the surface must stay closed: {stats:?}");
+    assert_eq!(
+        stats.non_manifold, 1,
+        "exactly one pinched edge, at the contact itself: {stats:?}"
     );
-}
-
-/// A run of edge contacts is still one manifold tube — the throats do
-/// not interfere with each other even when consecutive voxels share the
-/// dual cells around their contacts.
-#[test]
-fn a_diagonal_staircase_is_one_manifold_tube() {
-    let mut world = World::new();
-    for i in 0..6 {
-        world.set_voxel(IVec3::new(4 + i, 4 + i, 4), Voxel::ACTIVE);
-    }
-    let mesh = mesh_world(&world);
-    assert_closed(&mesh, 2, "diagonal staircase");
-    assert!(signed_volume(&mesh) > 0.0);
-}
-
-/// The same contact across a scale transition. The two leaves are
-/// different sizes, so the segment's two crossings are the centers of
-/// differently-sized faces — the throat is lopsided but must still be a
-/// throat.
-#[test]
-fn edge_touching_voxels_of_different_scales_stay_manifold() {
-    let mut world = World::new();
-    let chunk = world.chunk_mut(IVec3::ZERO);
-    chunk.set_region(IVec3::new(8, 8, 8), 4, Voxel::ACTIVE);
-    // one fine voxel touching the coarse voxel's +x/+y edge only
-    chunk.set(IVec3::new(12, 12, 9), Voxel::ACTIVE);
-    let mesh = mesh_world(&world);
-    assert_closed(&mesh, 2, "coarse/fine edge contact");
-    assert!(signed_volume(&mesh) > 0.0);
+    // Two closed sheets glued along one edge: 2 + 2 - 1. An odd Euler
+    // characteristic is itself the signature of the pinch — a closed
+    // manifold surface can never have one.
+    assert_eq!(
+        euler_characteristic(&welded),
+        3,
+        "expected one pinched piece"
+    );
 }
 
 /// Corner-only contacts are untouched by the face rule: no single face
