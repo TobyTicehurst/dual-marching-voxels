@@ -72,6 +72,22 @@ pub const fn face_index(axis: usize, side: usize) -> usize {
     axis * 2 + side
 }
 
+/// The two faces an edge lies on, as [`face_index`] values in ascending
+/// order.
+pub fn edge_faces(edge: usize) -> [usize; 2] {
+    let (lo, _) = EDGE_ENDPOINTS[edge];
+    let m = edge_axis(edge);
+    let mut faces = [0; 2];
+    let mut k = 0;
+    for axis in 0..3 {
+        if axis != m {
+            faces[k] = face_index(axis, (lo >> axis) & 1);
+            k += 1;
+        }
+    }
+    faces
+}
+
 /// Offset of corner `i` scaled by `size` — where the corner sits for a
 /// cell of that size.
 pub fn corner_pos(min: IVec3, size: i32, corner: usize) -> IVec3 {
@@ -88,6 +104,18 @@ mod tests {
             assert_eq!(edge_between(a, b), e);
             assert_eq!(edge_between(b, a), e);
             assert_eq!(edge_axis(e), (a ^ b).trailing_zeros() as usize);
+        }
+    }
+
+    #[test]
+    fn edge_faces_are_the_two_faces_containing_the_edge() {
+        for (e, &(a, b)) in EDGE_ENDPOINTS.iter().enumerate() {
+            let [f1, f2] = edge_faces(e);
+            assert!(f1 < f2);
+            for f in [f1, f2] {
+                let corners = face_corners(f / 2, f % 2);
+                assert!(corners.contains(&a) && corners.contains(&b), "edge {e} not on face {f}");
+            }
         }
     }
 

@@ -74,16 +74,34 @@ them would need a rule about the cell interior.
 
 The output is the full dual of the MC surface on three levels: patch →
 vertex, face **segment** → mesh edge, crossing → polygon. The middle one
-matters: where a patch swallows all four crossings of an ambiguous face
-(exactly the edge contacts — 36 of the 256 cases), that face's two
-segments run between the same pair of patch vertices, so two mesh edges
-collapse into one shared by four polygons — a pinch. Those segments get a
-vertex of their own, at the centroid of their two crossings, turning the
-collapsed edge into a small throat. This is Proposition 1 of Manifold
-Dual Contouring (Schaefer/Ju/Warren); its other condition — every patch a
-disk — already holds for all 256 cases. **The mesh is closed and
-2-manifold; keep it that way**: `non_manifold == 0` on every scene and
-test shape, and an odd Euler characteristic means a pinch is back.
+matters: where a patch would swallow all four crossings of an ambiguous
+face (exactly the edge contacts — 36 of the 256 cases: a diagonal pair,
+alone or with one voxel extended along the contact edge), it wraps the
+contact edge like a tube, its one vertex sits *on* the edge (the voxels'
+faces pinch to a point — a bow tie from above) and that face's two
+segments collapse onto one mesh edge shared by four polygons. So the
+table cuts that patch in two along the plane through the contact edge,
+joined by a **chord** (`patches::Chord`): in the extended cases the cut
+fans to two crossings and a third, triangular patch sits between. A
+crossing on a cut belongs to every patch along it (weight `1/n` in each
+vertex) and its polygon visits all of them in order
+(`CaseInfo::edge_patches`, honoured by `dmc::face_vertices_at`, which
+also merges the two edges that stand for one adjacency in a degenerate
+cell). The joint's ring then lands exactly on the bodies' corners: a
+diagonal chain meshes as one straight bar. This is Proposition 1 of
+Manifold Dual Contouring (Schaefer/Ju/Warren) in the form that matters
+for the dual — no patch owns both segments of a face; every patch a disk.
+**The mesh is closed and 2-manifold; keep it that way**:
+`non_manifold == 0` on every scene and test shape, and an odd Euler
+characteristic means a pinch is back.
+
+## Docs
+
+- `docs/algorithm.md` — step-by-step walkthrough of the mesher with a
+  fully worked two-voxel example (every vertex position and why), the
+  shrink factors of thin features, and the invariants to keep.
+- `docs/plan-smooth-joints.md` — history: the lump and bow tie at
+  edge-contact joints, the options weighed, and what was implemented.
 
 ## Workflow
 

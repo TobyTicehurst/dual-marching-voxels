@@ -34,8 +34,9 @@ grow the same branching tree one finest-scale voxel at a time, running
 diagonally to the voxel axes so nearly every surface is stair-stepped;
 `Tree` fills in each diagonal step to keep the tree one connected surface,
 while `DiagonalTree` leaves them, so branches break into 56 pieces touching
-only along edges — which the mesher then joins back up, so the rendered
-tree is whole apart from one corner-only contact it cannot see.
+only along edges — which the mesher then joins back up into straight bars,
+so the rendered tree is whole apart from one corner-only contact it cannot
+see.
 `TestBed` is a small hand-placed scene for examining one behaviour at a time
 — currently two finest-scale voxels diagonally across a cell edge, the
 minimal edge contact — and `Landscape` is the full terrain-and-objects
@@ -83,16 +84,24 @@ transitions crack-free.
 
 The result is the complete dual of the marching-cubes surface: patch →
 vertex, face **segment** → mesh edge, crossing → polygon. That middle
-level is what keeps it a 2-manifold. Where one patch takes all four
+level is what keeps it a 2-manifold. Where one patch would take all four
 crossings of an ambiguous face — an edge contact between two voxels —
-both of that face's segments would run between the same pair of patch
-vertices, collapsing two mesh edges into one shared by four polygons: a
-pinch. Such a segment therefore gets its own vertex, at the centroid of
-its two crossings, opening the join into a small throat. The condition is
-Proposition 1 of [Manifold Dual
+it wraps around the contact edge like a tube, its one vertex can only
+sit on that edge, and both of the face's segments would run between the
+same pair of vertices: the voxels' faces pinch to a point and two mesh
+edges collapse into one shared by four polygons. So the generated table
+cuts such a patch in two along the plane through the contact edge, with
+a **chord** (an edge of the surface on no cell face) between the halves;
+where the cut would leave through a segment rather than a crossing it
+fans to both of that segment's crossings and a small third patch sits
+between. A crossing on a cut counts toward every patch along it, and the
+polygon dual to it visits all of their vertices. The joint becomes a
+proper four-sided ring whose corners land exactly where the bodies'
+corners do, so a diagonal chain of voxels meshes as one straight bar.
+This satisfies Proposition 1 of [Manifold Dual
 Contouring](https://doi.org/10.1109/TVCG.2007.1012) (Schaefer, Ju &
-Warren), whose other requirement — that each patch be a disk — the
-generated table already satisfies in all 256 cases.
+Warren) in the form that matters for the dual — no patch owns both
+segments of a face — and every patch is still a disk.
 
 The traversal is the classic four-proc octree recursion from dual
 contouring (`cell_proc`/`face_proc`/`edge_proc`/`vert_proc`), with a leaf

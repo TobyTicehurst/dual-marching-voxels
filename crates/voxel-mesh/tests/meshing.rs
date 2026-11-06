@@ -93,52 +93,85 @@ fn slab_closes_against_the_world_boundary() {
     let vol = signed_volume(&mesh);
     assert!((8500.0..13800.0).contains(&vol), "slab volume {vol}");
 }
-/// Two voxels meeting along an edge mesh as **one manifold** surface: the
-/// ambiguous faces between them are resolved to join the material, and
-/// the segment vertices give that join a throat instead of a pinch.
+/// Every vertex of a chain of voxels along the x = y diagonal lies on the
+/// straight bar of rectangular cross-section that the chain should mesh
+/// to: 1/6 either side of the diagonal in x and y (`|x − y| = 1/3`) or on
+/// it (the end caps), and 1/6 above or below the voxel centers in z.
+fn assert_on_the_diagonal_bar(mesh: &PolyMesh, z_center: f32, what: &str) {
+    let near = |a: f32, b: f32| (a - b).abs() < 1e-5;
+    for p in &mesh.positions {
+        let across = (p.x - p.y).abs();
+        assert!(
+            near(across, 0.0) || near(across, 1.0 / 3.0),
+            "{what}: {p:?} is off the bar across the chain"
+        );
+        assert!(
+            near((p.z - z_center).abs(), 1.0 / 6.0),
+            "{what}: {p:?} is off the bar vertically"
+        );
+    }
+}
+
+/// Two voxels meeting along an edge mesh as **one manifold** surface
+/// shaped like a bar: the ambiguous faces between them are resolved to
+/// join the material, and the patch table cuts the joint's tube patch in
+/// two so the joint has a four-sided ring instead of a single vertex.
 ///
-/// Without them the two dual cells straddling the contact both place
-/// their vertex on the contact line itself and the two surface segments
-/// between them collapse onto a single mesh edge, which the two voxels'
-/// four polygons then all share. Splitting the segments turns that edge
-/// into a four-sided opening, so each of those four polygons picks up one
-/// extra corner and every edge is back to exactly two faces.
+/// With one vertex per contact cell both would sit on the contact line
+/// itself: the voxels' top faces would pinch to a point there and the
+/// two surface segments between the cells would collapse onto a single
+/// mesh edge shared by four polygons. Splitting the patch gives each
+/// contact cell two vertices, placed where the bodies' corners are, so
+/// the four faces touching the contact line stay quads and the ±z faces
+/// of both voxels become pentagons running onto the joint's ring.
 #[test]
-fn edge_touching_voxels_mesh_as_one_surface_with_a_manifold_throat() {
+fn edge_touching_voxels_mesh_as_one_bar() {
     let mut world = World::new();
     world.set_voxel(IVec3::new(4, 4, 4), Voxel::ACTIVE);
     world.set_voxel(IVec3::new(5, 5, 4), Voxel::ACTIVE);
     let mesh = mesh_world(&world);
     assert_eq!(mesh.faces.len(), 12);
-    let widened = mesh.faces.iter().filter(|f| f.len() == 5).count();
-    assert_eq!(widened, 4, "the four polygons around the contact");
+    let pentagons = mesh.faces.iter().filter(|f| f.len() == 5).count();
+    assert_eq!(pentagons, 4, "the ±z faces of both voxels");
+    assert_eq!(weld(&mesh).positions.len(), 16, "12 body corners + 4 on the joint");
 
-    // Two blobs joined by one throat is still a sphere: even Euler
-    // characteristic, and no edge shared by more than two faces. Before
-    // the split this was 3 with one non-manifold edge — an odd
-    // characteristic being impossible for a closed manifold.
+    // Two boxes joined through one ring is still a sphere: even Euler
+    // characteristic, and no edge shared by more than two faces. Pinched,
+    // this was 3 with one non-manifold edge — an odd characteristic being
+    // impossible for a closed manifold.
     assert_closed(&mesh, 2, "edge-touching pair");
+    assert_on_the_diagonal_bar(&mesh, 4.5, "edge-touching pair");
 
-    // The throat is a real opening, not a collapsed one: the two segment
-    // vertices sit either side of the contact line (x = y = 5).
-    let throat: Vec<Vec3> = mesh
+    // The joint's ring: 1/6 either side of the contact line x = y = 5,
+    // at the bodies' top and bottom heights — the same cross-section as
+    // the bodies, so the pair is one straight bar with no waist or lump.
+    let sixth = 1.0 / 6.0;
+    let mut joint: Vec<Vec3> = mesh
         .positions
         .iter()
         .copied()
-        .filter(|p| p.z == 4.5 && p.x != 5.0)
+        .filter(|p| (p.x + p.y - 10.0).abs() < 1e-5)
         .collect();
-    assert_eq!(throat.len(), 2, "two segment vertices: {throat:?}");
-    assert!(
-        (throat[0] - throat[1]).length() > 0.5,
-        "throat is pinched shut: {throat:?}"
-    );
+    joint.sort_by(|a, b| a.to_array().partial_cmp(&b.to_array()).unwrap());
+    joint.dedup_by(|a, b| a.abs_diff_eq(*b, 1e-5));
+    let expected = [
+        Vec3::new(5.0 - sixth, 5.0 + sixth, 4.5 - sixth),
+        Vec3::new(5.0 - sixth, 5.0 + sixth, 4.5 + sixth),
+        Vec3::new(5.0 + sixth, 5.0 - sixth, 4.5 - sixth),
+        Vec3::new(5.0 + sixth, 5.0 - sixth, 4.5 + sixth),
+    ];
+    assert_eq!(joint.len(), 4, "joint ring: {joint:?}");
+    for (got, want) in joint.iter().zip(expected) {
+        assert!(got.abs_diff_eq(want, 1e-5), "joint ring {got:?} != {want:?}");
+    }
+    assert_no_folded_triangles(&mesh, "edge-touching pair");
 }
 
-/// A run of edge contacts is still one manifold tube — the throats do
-/// not interfere with each other even when consecutive voxels share the
-/// dual cells around their contacts.
+/// A run of edge contacts is one straight bar: the joints do not
+/// interfere with each other even when consecutive voxels share the dual
+/// cells around their contacts, and every joint ring matches the bodies.
 #[test]
-fn a_diagonal_staircase_is_one_manifold_tube() {
+fn a_diagonal_staircase_is_one_straight_bar() {
     let mut world = World::new();
     for i in 0..6 {
         world.set_voxel(IVec3::new(4 + i, 4 + i, 4), Voxel::ACTIVE);
@@ -146,12 +179,87 @@ fn a_diagonal_staircase_is_one_manifold_tube() {
     let mesh = mesh_world(&world);
     assert_closed(&mesh, 2, "diagonal staircase");
     assert!(signed_volume(&mesh) > 0.0);
+    assert_on_the_diagonal_bar(&mesh, 4.5, "diagonal staircase");
+    assert_no_folded_triangles(&mesh, "diagonal staircase");
+}
+
+/// An edge contact where one voxel continues one step along the contact
+/// line is the other kind of joint case: the cut through the tube patch
+/// cannot end on a crossing on one side, so it fans out to two and a
+/// third, triangular patch sits between. The result must still be closed
+/// and manifold, whichever voxel is extended and whether the cells on
+/// both ends of the contact are of that kind.
+#[test]
+fn edge_touching_voxels_with_a_column_stay_manifold() {
+    let cases: [(&str, &[IVec3]); 4] = [
+        (
+            "column above the first",
+            &[IVec3::new(4, 4, 4), IVec3::new(5, 5, 4), IVec3::new(4, 4, 5)],
+        ),
+        (
+            "column above the second",
+            &[IVec3::new(4, 4, 4), IVec3::new(5, 5, 4), IVec3::new(5, 5, 5)],
+        ),
+        (
+            "column below the first",
+            &[IVec3::new(4, 4, 4), IVec3::new(5, 5, 4), IVec3::new(4, 4, 3)],
+        ),
+        (
+            "column through the first",
+            &[
+                IVec3::new(4, 4, 3),
+                IVec3::new(4, 4, 4),
+                IVec3::new(4, 4, 5),
+                IVec3::new(5, 5, 4),
+            ],
+        ),
+    ];
+    for (what, voxels) in cases {
+        let mut world = World::new();
+        for &p in voxels {
+            world.set_voxel(p, Voxel::ACTIVE);
+        }
+        let mesh = mesh_world(&world);
+        assert_closed(&mesh, 2, what);
+        assert!(signed_volume(&mesh) > 0.0, "{what}");
+        assert_no_folded_triangles(&mesh, what);
+    }
+}
+
+/// Every one of the 256 cases, placed as a 2×2×2 block of voxels in empty
+/// space, meshes closed and manifold. The block's own dual cell is the
+/// case itself and the cells around it run through its sub-cases, so
+/// this exercises every split joint beside every neighbour it can have.
+#[test]
+fn every_two_by_two_block_is_a_closed_manifold() {
+    for mask in 1u16..255 {
+        let mut world = World::new();
+        for o in 0..8 {
+            if mask & (1 << o) != 0 {
+                let p = IVec3::new(o & 1, (o >> 1) & 1, (o >> 2) & 1);
+                world.set_voxel(IVec3::splat(8) + p, Voxel::ACTIVE);
+            }
+        }
+        let mesh = mesh_world(&world);
+        let welded = weld(&mesh);
+        let stats = edge_stats(&welded);
+        assert_eq!(stats.boundary, 0, "block {mask:08b}: cracks: {stats:?}");
+        assert_eq!(stats.non_manifold, 0, "block {mask:08b}: pinches: {stats:?}");
+        assert_eq!(
+            euler_characteristic(&welded) % 2,
+            0,
+            "block {mask:08b}: odd Euler characteristic"
+        );
+        assert!(signed_volume(&mesh) > 0.0, "block {mask:08b}: inside out");
+        assert_no_folded_triangles(&mesh, &format!("block {mask:08b}"));
+    }
 }
 
 /// The same contact across a scale transition. The two leaves are
 /// different sizes, so the segment's two crossings are the centers of
-/// differently-sized faces — the throat is lopsided but must still be a
-/// throat.
+/// differently-sized faces and the contact cells are degenerate (the
+/// coarse leaf fills two slots), so the joint ring is lopsided and two
+/// cell edges stand for one adjacency — but it must still be a ring.
 #[test]
 fn edge_touching_voxels_of_different_scales_stay_manifold() {
     let mut world = World::new();

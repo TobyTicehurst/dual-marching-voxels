@@ -27,24 +27,29 @@
 //! watertight there (a plain quad would leave T-junction cracks against
 //! the smaller neighbouring faces).
 //!
-//! ## Segment vertices
+//! ## Joints
 //!
 //! The output is the full dual of the marching-cubes surface, on three
 //! levels: patch → vertex, **segment → mesh edge**, crossing → polygon.
-//! Taking mesh edges to be pairs of patch vertices is not enough. Where
-//! one patch swallows all four crossings of an ambiguous face — two
-//! voxels meeting along an edge — that face's two segments run between
-//! the same pair of patch vertices, and the two mesh edges collapse into
-//! one that all four surrounding polygons share. That is the pinch, and
-//! Manifold Dual Contouring's Proposition 1 rules it out by exactly this
-//! condition (see [`crate::patches`]).
+//! At an edge contact — two voxels diagonal across a cell face — the
+//! patch table would naturally give one patch wrapping the contact edge,
+//! whose single vertex has to sit on that edge: the voxels' faces pinch
+//! to a point there and the face's two segments collapse onto one mesh
+//! edge shared by four polygons. So the table cuts such a patch in two
+//! (three in the extended cases) along the plane through the contact
+//! edge, with [`crate::patches::Chord`]s between the pieces (see its
+//! module docs). This mesher only has to honour two consequences:
 //!
-//! So when both cells across such a face merged it, the segment gets a
-//! vertex of its own — at the centroid of its two crossings, the same
-//! rule that places a patch vertex — and the polygons on either side pick
-//! it up (`Builder::segment_at`). The collapsed edge becomes a
-//! four-sided throat, every mesh edge is back to two polygons, and
-//! nothing else in the mesh changes: flat regions keep their quads.
+//! - a crossing on a chord belongs to every patch along it, and counts
+//!   `1/n` toward each of the `n` vertices (`emit_dual_cell`);
+//! - the polygon dual to such a crossing visits all of those vertices,
+//!   in the order the table gives around the crossing, entered from the
+//!   side of the polygon's previous corner (`face_vertices_at`).
+//!
+//! Chords then come out as mesh edges between two vertices of one cell,
+//! and a joint is a proper four-sided ring whose corners sit where the
+//! bodies' corners do — a diagonal chain of voxels meshes as one
+//! straight bar. Nothing else changes: flat regions keep their quads.
 //!
 //! ## Traversal
 //!
@@ -74,8 +79,8 @@ use voxel_core::octree::{Node, Octree, octant_offset};
 use voxel_core::tree_view::{EMPTY_NODE, TreeNode};
 use voxel_core::world::World;
 
-use crate::cube::{EDGE_ENDPOINTS, edge_axis, edge_between, face_corners, face_index};
-use crate::patches::{NO_PATCH, case_info};
+use crate::cube::{EDGE_ENDPOINTS, edge_axis, edge_between, edge_faces, face_index};
+use crate::patches::case_info;
 use crate::poly_mesh::PolyMesh;
 
 /// Meshes every chunk of the world, seams included, into one mesh with
@@ -246,9 +251,8 @@ fn tangents(axis: usize) -> (usize, usize) {
 /// Identity of one minimal face-adjacency: the axis it is normal to and
 /// the rectangle the two leaves share. Every construct that names the
 /// same adjacency — a dual cell's crossed edge, a surface polygon — gets
-/// the same key, which is how a segment vertex is shared by exactly the
-/// two polygons meeting along it.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+/// the same key.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 struct FaceKey {
     axis: u8,
     /// Min corner of the shared rectangle; `rmin[axis]` is its plane.
@@ -332,33 +336,16 @@ struct FaceRec {
 }
 
 /// A dual cell's contribution: its corner-state mask and one mesh vertex
-/// per patch.
+/// per patch, indexed like `case_info(mask).patches`.
 struct DualCell {
     mask: u8,
     patch_verts: Vec<u32>,
-    /// The adjacency each crossed edge of a **merged** face stands for
-    /// (see `patches::CaseInfo::face_merged`) — how a polygon names the
-    /// other crossing of the segment it is about to split. Empty for
-    /// every cell but those in the 36 cases that need a segment vertex.
-    merged_edges: Vec<(u8, FaceKey)>,
-}
-
-impl DualCell {
-    fn face_key(&self, edge: usize) -> Option<FaceKey> {
-        self.merged_edges
-            .iter()
-            .find(|&&(e, _)| usize::from(e) == edge)
-            .map(|&(_, key)| key)
-    }
 }
 
 #[derive(Default)]
 struct Builder {
     mesh: PolyMesh,
     dual_cells: HashMap<IVec3, DualCell>,
-    /// One vertex per surface segment that had to be split off, keyed by
-    /// the two adjacencies it joins (ordered, so both polygons agree).
-    segment_verts: HashMap<(FaceKey, FaceKey), u32>,
     faces: Vec<FaceRec>,
     /// What to record beyond the mesh, and the recordings so far.
     what: Inspect,
@@ -599,52 +586,33 @@ impl Builder {
             });
         }
         let info = case_info(mask);
-        let mut edge_face: [Option<FaceKey>; 12] = [None; 12];
+        let mut crossing: [Option<(Vec3, f32)>; 12] = [None; 12];
         for (e, &(a, b)) in EDGE_ENDPOINTS.iter().enumerate() {
-            if info.edge_patch[e] != NO_PATCH {
-                edge_face[e] = Some(shared_face(slots[a], slots[b], edge_axis(e), q));
+            let shared_by = info.patches_of(e).len();
+            if shared_by > 0 {
+                let key = shared_face(slots[a], slots[b], edge_axis(e), q);
+                // A crossing on a chord is on the boundary of every
+                // patch along it, so it counts once in total, split
+                // evenly between them.
+                crossing[e] = Some((key.center(), 1.0 / shared_by as f32));
             }
         }
 
         let mut patch_verts = Vec::with_capacity(info.patches.len());
         for &patch in &info.patches {
             let mut sum = Vec3::ZERO;
-            let mut count = 0;
-            for (e, key) in edge_face.iter().enumerate() {
+            let mut total = 0.0;
+            for (e, c) in crossing.iter().enumerate() {
                 if patch & (1 << e) != 0 {
-                    sum += key.expect("a patch edge is crossed").center();
-                    count += 1;
+                    let (p, w) = c.expect("a patch edge is crossed");
+                    sum += p * w;
+                    total += w;
                 }
             }
-            patch_verts.push(self.mesh.push_vertex(sum / count as f32));
+            patch_verts.push(self.mesh.push_vertex(sum / total));
         }
 
-        // On a merged face the two segments would otherwise share one
-        // mesh edge; remember what its four crossings are so `finish`
-        // can tell them apart.
-        let mut merged_edges = Vec::new();
-        for axis in 0..3 {
-            for side in 0..2 {
-                if !info.face_merged[face_index(axis, side)] {
-                    continue;
-                }
-                let c = face_corners(axis, side);
-                for i in 0..4 {
-                    let e = edge_between(c[i], c[(i + 1) % 4]);
-                    let key = edge_face[e].expect("a merged face has all 4 edges crossed");
-                    merged_edges.push((e as u8, key));
-                }
-            }
-        }
-
-        let prev = self.dual_cells.insert(
-            q,
-            DualCell {
-                mask,
-                patch_verts,
-                merged_edges,
-            },
-        );
+        let prev = self.dual_cells.insert(q, DualCell { mask, patch_verts });
         debug_assert!(prev.is_none(), "dual cell at {q} emitted twice");
     }
 
@@ -679,137 +647,114 @@ impl Builder {
         });
     }
 
-    /// The mesh vertex a crossed face uses at boundary point `q` of its
-    /// shared rectangle: the vertex of the dual cell's patch containing
-    /// this adjacency. Corner points must have a dual cell; interior edge
-    /// points ("hanging" octree vertices) contribute only where one
-    /// exists.
-    fn face_vertex_at(&self, f: &FaceRec, q: IVec3, required: bool) -> Option<u32> {
+    /// The mesh vertices a crossed face uses at boundary point `q` of its
+    /// shared rectangle: those of the dual cell's patches touching this
+    /// adjacency, in order around it. The polygon arrives from the
+    /// previous ring point along `d_in` and leaves toward the next along
+    /// `d_out`, so the order runs from the patch owning the surface
+    /// segment on the cell face toward the previous point to the one
+    /// owning the segment toward the next. Corner points must have a dual
+    /// cell; interior edge points ("hanging" octree vertices) contribute
+    /// only where one exists.
+    ///
+    /// At a hanging point the two leaves span `q` along the side's axis
+    /// and so fill two slots each: two cell edges stand for this one
+    /// adjacency (and a zero-length segment joins them on the face
+    /// between). The ring then walks the first edge's patches up to that
+    /// face and the second's from it onward.
+    fn face_vertices_at(
+        &self,
+        f: &FaceRec,
+        q: IVec3,
+        required: bool,
+        d_in: IVec3,
+        d_out: IVec3,
+        out: &mut Vec<u32>,
+    ) {
         let Some(cell) = self.dual_cells.get(&q) else {
             assert!(
                 !required,
                 "no dual cell at {q} for a crossed face {:?}+{}",
                 f.key.rmin, f.key.rsize
             );
-            return None;
+            return;
         };
-        // Local edge: along the face normal, at tangent slots pointing
-        // into the rectangle — both adjacent leaves cover that quadrant,
-        // so those two slots are exactly this adjacency.
-        let (u, v) = tangents(f.key.axis as usize);
-        let o_neg = (self.slot_bit(f, q, u) << u) | (self.slot_bit(f, q, v) << v);
-        let le = edge_between(o_neg, o_neg | (1 << f.key.axis));
-        let p = case_info(cell.mask).edge_patch[le];
-        assert_ne!(p, NO_PATCH, "dual cell at {q} has no patch on edge {le}");
-        Some(cell.patch_verts[p as usize])
+        let info = case_info(cell.mask);
+        let axis = f.key.axis as usize;
+        let (u, v) = tangents(axis);
+        // The previous point lies back along `d_in`, the next ahead along
+        // `d_out`; the faces of the cell toward them.
+        let face_toward = |d: IVec3, ahead: bool| {
+            let t = (0..3).find(|&t| d[t] != 0).expect("ring step is axis-aligned");
+            debug_assert!(t == u || t == v, "ring must step along a face tangent");
+            face_index(t, usize::from((d[t] > 0) == ahead))
+        };
+        let f_prev = face_toward(d_in, false);
+        let f_next = face_toward(d_out, true);
+        // The cell edges standing for this adjacency: along the face
+        // normal, at the tangent slots the rectangle covers — one per
+        // tangent at a corner, both where `q` is interior to a side.
+        let edge_on = |face: usize| {
+            let (t, side) = (face / 2, face % 2);
+            let other = if t == u { v } else { u };
+            let o_neg = (side << t) | (self.slot_bit(f, q, other) << other);
+            edge_between(o_neg, o_neg | (1 << axis))
+        };
+        let (e_in, e_out) = (edge_on(f_prev), edge_on(f_next));
+        // `chain(e, from)`: the patches around crossing `e` starting from
+        // the face `from`, which must be one of the edge's two faces.
+        let chain = |e: usize, from: usize| {
+            let [f_lo, f_hi] = edge_faces(e);
+            debug_assert!(from == f_lo || from == f_hi, "face {from} does not hold edge {e}");
+            let c = info.patches_of(e);
+            assert!(!c.is_empty(), "dual cell at {q} has no patch on edge {e}");
+            let forward = from == f_lo;
+            (0..c.len()).map(move |i| c[if forward { i } else { c.len() - 1 - i }])
+        };
+        let push = |out: &mut Vec<u32>, p: u8| out.push(cell.patch_verts[p as usize]);
+        if e_in == e_out {
+            chain(e_in, f_prev).for_each(|p| push(out, p));
+        } else {
+            let f_mid = edge_faces(e_in)
+                .into_iter()
+                .find(|fm| edge_faces(e_out).contains(fm))
+                .expect("coincident crossings share a face");
+            let mut first: Vec<u8> = chain(e_in, f_prev).collect();
+            let rest: Vec<u8> = chain(e_out, f_mid).collect();
+            debug_assert_eq!(first.last(), rest.first(), "zero-length segment changes patch");
+            first.pop();
+            first.into_iter().chain(rest).for_each(|p| push(out, p));
+        }
     }
 
     /// Which side of `q` along tangent `t` lies inside `f`'s rectangle —
     /// the slot bit naming a corner of the cell that both adjacent leaves
-    /// cover.
+    /// cover. (Where `q` is interior to a side both do; the caller then
+    /// asks per face instead.)
     fn slot_bit(&self, f: &FaceRec, q: IVec3, t: usize) -> usize {
         usize::from(q[t] != f.key.rmin[t] + f.key.rsize)
     }
 
-    /// The two adjacencies joined by the surface segment that `f` uses on
-    /// the cell face between the dual cells at `q` and `qn`, but only
-    /// when **both** cells merged that face's four crossings into one
-    /// patch. That is exactly when the face's two segments would land on
-    /// the same pair of patch vertices, leaving one mesh edge shared by
-    /// four polygons — the pinch condition (2) of Proposition 1 in
-    /// [`crate::patches`] rules out. Both polygons on the segment ask the
-    /// same question of the same two cells, so they agree.
-    fn segment_at(&self, f: &FaceRec, q: IVec3, qn: IVec3) -> Option<(FaceKey, FaceKey)> {
-        let d = qn - q;
-        let t = (0..3).find(|&t| d[t] != 0)?;
-        debug_assert_eq!(
-            d.x.abs() + d.y.abs() + d.z.abs(),
-            d[t].abs(),
-            "consecutive boundary cells must differ on one axis"
-        );
-        let side = usize::from(d[t] > 0);
-        let here = self.dual_cells.get(&q)?;
-        let there = self.dual_cells.get(&qn)?;
-        let info = case_info(here.mask);
-        if !info.face_merged[face_index(t, side)]
-            || !case_info(there.mask).face_merged[face_index(t, 1 - side)]
-        {
-            return None;
-        }
-        // This adjacency's edge in the cell at `q`, on the face toward
-        // `qn`: that face is at slot bit `side` along `t`, and the other
-        // tangent picks its side the same way `face_vertex_at` does. A
-        // merged face has four distinct corner leaves, so `q` cannot be
-        // hanging along that tangent and the choice is unambiguous.
-        let axis = f.key.axis as usize;
-        let (u, v) = tangents(axis);
-        let other = if t == u { v } else { u };
-        debug_assert!(t == u || t == v, "boundary step must run along the face");
-        let o_neg = (side << t) | (self.slot_bit(f, q, other) << other);
-        let le = edge_between(o_neg, o_neg | (1 << axis));
-        debug_assert_eq!(
-            here.face_key(le),
-            Some(f.key),
-            "local edge at {q} is not this adjacency"
-        );
-        let partner = info
-            .segment_partner(face_index(t, side), le)
-            .expect("a merged face pairs up every one of its crossings");
-        let other_key = here
-            .face_key(partner)
-            .expect("every edge of a merged face is recorded");
-        Some(if f.key < other_key {
-            (f.key, other_key)
-        } else {
-            (other_key, f.key)
-        })
-    }
-
-    /// The vertex splitting that segment off, created once and shared by
-    /// the two polygons that meet along it. It sits at the centroid of
-    /// the segment's two crossings — the same rule that places a patch
-    /// vertex at the centroid of its patch's crossings.
-    fn segment_vertex(&mut self, f: &FaceRec, q: IVec3, qn: IVec3) -> Option<u32> {
-        let key = self.segment_at(f, q, qn)?;
-        let mesh = &mut self.mesh;
-        Some(
-            *self
-                .segment_verts
-                .entry(key)
-                .or_insert_with(|| mesh.push_vertex((key.0.center() + key.1.center()) * 0.5)),
-        )
-    }
-
     fn finish(mut self) -> (PolyMesh, Inspection) {
         let faces = std::mem::take(&mut self.faces);
+        let mut ids = Vec::with_capacity(8);
         for f in &faces {
             let (u, v) = tangents(f.key.axis as usize);
             let rsize = f.key.rsize;
             // Boundary cycle: the rectangle's corners in counter-clockwise
             // order seen from +axis, with any hanging dual cells between
-            // them.
+            // them. Each point is entered along the step that reaches it
+            // and left along its own side's step; a split cell orders its
+            // vertices by those.
             let corners = [(0, 0), (1, 0), (1, 1), (0, 1)]
                 .map(|(bu, bv)| f.key.min_corner() + bu * rsize * unit(u) + bv * rsize * unit(v));
-            let mut ring: Vec<(IVec3, u32)> = Vec::with_capacity(4);
+            let steps: [IVec3; 4] = std::array::from_fn(|i| (corners[(i + 1) % 4] - corners[i]) / rsize);
+            ids.clear();
             for i in 0..4 {
-                let (a, b) = (corners[i], corners[(i + 1) % 4]);
-                let step = (b - a) / rsize;
                 for k in 0..rsize {
-                    let q = a + step * k;
-                    if let Some(id) = self.face_vertex_at(f, q, k == 0) {
-                        ring.push((q, id));
-                    }
-                }
-            }
-            // Between consecutive cells, insert the segment vertex where
-            // one is needed to keep the two segments apart.
-            let mut ids = Vec::with_capacity(ring.len());
-            for i in 0..ring.len() {
-                let (q, id) = ring[i];
-                let qn = ring[(i + 1) % ring.len()].0;
-                ids.push(id);
-                if let Some(sv) = self.segment_vertex(f, q, qn) {
-                    ids.push(sv);
+                    let d_in = if k == 0 { steps[(i + 3) % 4] } else { steps[i] };
+                    let q = corners[i] + steps[i] * k;
+                    self.face_vertices_at(f, q, k == 0, d_in, steps[i], &mut ids);
                 }
             }
             // neg side active → surface faces +axis; the cycle is CCW from
@@ -817,7 +762,7 @@ impl Builder {
             if !f.neg_active {
                 ids.reverse();
             }
-            self.mesh.push_face(ids);
+            self.mesh.push_face(ids.clone());
         }
         (self.mesh, self.inspection)
     }
