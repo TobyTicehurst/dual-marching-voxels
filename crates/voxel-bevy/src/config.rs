@@ -3,14 +3,27 @@
 
 use bevy::color::Color;
 
+// Only used when `CAMERA` is set; the compile-time switch below is the
+// intended way to point the camera somewhere, so keep it importable.
+#[allow(unused_imports)]
+use bevy::math::Vec3;
+
 use crate::debug::voxel_markers::MarkerShape;
-use crate::scene::Scene;
+use crate::scene::{CameraStart, Scene};
 
 /// Which scene to build — see [`crate::scene`]. `TestBed` is the small
 /// hand-placed scratch scene for testing one behaviour at a time, `Tree` a
 /// diagonal-heavy tree of finest-scale voxels, `DiagonalTree` that same
 /// tree left broken at its diagonal joints, and `Landscape` the full demo.
-pub const SCENE: Scene = Scene::TestBed;
+pub const SCENE: Scene = Scene::TrunkTree;
+
+/// Start the camera here instead of at the scene's own viewpoint — for
+/// looking closely at one spot (a junction, a transition) and for taking
+/// reproducible screenshots of it. `None` uses the scene's default; e.g.
+/// `Some(CameraStart { eye: Vec3::new(46.0, 33.0, 49.0), target:
+/// Vec3::new(40.0, 29.5, 43.0), speed: 3.0 })` looks at one of the
+/// diagonal tree's forks.
+pub const CAMERA: Option<CameraStart> = None;
 
 /// Outline every chunk's 32³ bounds.
 pub const SHOW_CHUNK_BOUNDS: bool = true;

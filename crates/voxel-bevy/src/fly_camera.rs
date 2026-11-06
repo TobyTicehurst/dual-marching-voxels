@@ -21,7 +21,7 @@ pub fn plugin(app: &mut App) {
 }
 
 fn spawn_camera(mut commands: Commands) {
-    let start = scene::camera_start(config::SCENE);
+    let start = config::CAMERA.unwrap_or_else(|| scene::camera_start(config::SCENE));
     let transform = Transform::from_translation(start.eye).looking_at(start.target, Vec3::Y);
     let (yaw, pitch, _) = transform.rotation.to_euler(EulerRot::YXZ);
     commands.spawn((

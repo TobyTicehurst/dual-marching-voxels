@@ -27,6 +27,21 @@ pub enum Scene {
     /// into pieces touching along edges — which the mesher now joins, so
     /// this shows the join, and the one corner contact it cannot see.
     DiagonalTree,
+    /// An axis-aligned T: a bar with a stem rising from its middle. All
+    /// face contacts — the baseline junction.
+    TJunction,
+    /// A Y: a vertical stem forking into two arms that climb diagonally
+    /// in the x/y plane, so every step along an arm is an edge contact
+    /// and the fork itself is two edge contacts on one voxel.
+    YJunction,
+    /// The Y turned so its arms climb along body diagonals: consecutive
+    /// voxels touch only at a corner, which the face rule cannot see, so
+    /// each arm meshes as a string of separate cubes.
+    YJunctionCorner,
+    /// A 2×2 trunk with one-voxel-thick branches leaving it at 45°, some
+    /// from a face of the trunk and some from an edge, one of them
+    /// forking — the shape a drawn tree is made of.
+    TrunkTree,
 }
 
 /// Where the fly camera starts and how fast it moves, per scene — a small
@@ -43,6 +58,10 @@ pub fn build_world(scene: Scene) -> World {
         Scene::Landscape => landscape(),
         Scene::Tree => tree(true),
         Scene::DiagonalTree => tree(false),
+        Scene::TJunction => t_junction(),
+        Scene::YJunction => y_junction(false),
+        Scene::YJunctionCorner => y_junction(true),
+        Scene::TrunkTree => trunk_tree(),
     }
 }
 
@@ -54,6 +73,21 @@ pub fn camera_start(scene: Scene) -> CameraStart {
             eye: Vec3::new(21.0, 20.0, 22.0),
             target: Vec3::new(16.0, 16.0, 16.5),
             speed: 3.0,
+        },
+        Scene::TJunction | Scene::YJunction => CameraStart {
+            eye: Vec3::new(30.0, 26.0, 36.0),
+            target: Vec3::new(16.0, 18.0, 16.0),
+            speed: 5.0,
+        },
+        Scene::YJunctionCorner => CameraStart {
+            eye: Vec3::new(34.0, 28.0, 38.0),
+            target: Vec3::new(16.0, 18.0, 16.0),
+            speed: 5.0,
+        },
+        Scene::TrunkTree => CameraStart {
+            eye: Vec3::new(40.0, 28.0, 46.0),
+            target: Vec3::new(17.0, 15.0, 17.0),
+            speed: 8.0,
         },
         Scene::Tree | Scene::DiagonalTree => CameraStart {
             eye: Vec3::new(100.0, 44.0, 100.0),
@@ -90,6 +124,58 @@ fn test_bed() -> World {
     chunk.set(IVec3::new(15, 15, 16), Voxel::ACTIVE);
     chunk.set(IVec3::new(16, 16, 16), Voxel::ACTIVE);
 
+    world
+}
+
+/// Sets a run of finest-scale voxels from `from`, stepping by `step`,
+/// `count` times (the first voxel is `from` itself).
+fn run(world: &mut World, from: IVec3, step: IVec3, count: i32) {
+    for i in 0..count {
+        world.set_voxel(from + step * i, Voxel::ACTIVE);
+    }
+}
+
+/// An axis-aligned T in the x/y plane: nothing but face contacts.
+fn t_junction() -> World {
+    let mut world = World::new();
+    run(&mut world, IVec3::new(10, 16, 16), IVec3::X, 13);
+    run(&mut world, IVec3::new(16, 17, 16), IVec3::Y, 8);
+    world
+}
+
+/// A vertical stem forking into two arms. With `corner` false the arms
+/// climb at 45° in the x/y plane (edge contacts throughout); with it true
+/// they climb along body diagonals, touching only at corners.
+fn y_junction(corner: bool) -> World {
+    let mut world = World::new();
+    run(&mut world, IVec3::new(16, 8, 16), IVec3::Y, 9);
+    let dz = i32::from(corner);
+    run(&mut world, IVec3::new(17, 17, 16 + dz), IVec3::new(1, 1, dz), 8);
+    run(&mut world, IVec3::new(15, 17, 16 - dz), IVec3::new(-1, 1, -dz), 8);
+    world
+}
+
+/// A 2×2 trunk (x, z ∈ {16, 17}) from y = 4 to 26 with one-voxel
+/// branches at 45°. Each branch starts either face-adjacent to the trunk
+/// or diagonal to it, and one branch forks.
+fn trunk_tree() -> World {
+    let mut world = World::new();
+    for y in 4..=26 {
+        for (dx, dz) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
+            world.set_voxel(IVec3::new(16 + dx, y, 16 + dz), Voxel::ACTIVE);
+        }
+    }
+    // +x side, low, starting on the trunk's face; forks after 4 voxels
+    run(&mut world, IVec3::new(18, 10, 16), IVec3::new(1, 1, 0), 8);
+    run(&mut world, IVec3::new(21, 14, 17), IVec3::new(0, 1, 1), 4);
+    // -x side, starting diagonal to the trunk's edge
+    run(&mut world, IVec3::new(15, 14, 17), IVec3::new(-1, 1, 0), 7);
+    // +z side, on the face
+    run(&mut world, IVec3::new(17, 17, 18), IVec3::new(0, 1, 1), 6);
+    // -z side, diagonal to the edge
+    run(&mut world, IVec3::new(16, 20, 15), IVec3::new(0, 1, -1), 6);
+    // +x side, high and short
+    run(&mut world, IVec3::new(18, 23, 17), IVec3::new(1, 1, 0), 4);
     world
 }
 
@@ -421,7 +507,7 @@ mod tests {
     /// almost nothing but diagonal contacts, and the landscape mixes
     /// scales everywhere. All of them must come out closed and
     /// 2-manifold — every edge contact is a place the surface used to
-    /// pinch before segment vertices split those junctions open.
+    /// pinch before the patch table split those junctions open.
     #[test]
     fn every_scene_meshes_to_a_closed_manifold_surface() {
         use voxel_mesh::analysis::{edge_stats, weld};
@@ -431,6 +517,10 @@ mod tests {
             Scene::TestBed,
             Scene::Tree,
             Scene::DiagonalTree,
+            Scene::TJunction,
+            Scene::YJunction,
+            Scene::YJunctionCorner,
+            Scene::TrunkTree,
             Scene::Landscape,
         ] {
             let mesh = mesh_world(&build_world(scene));
