@@ -416,4 +416,27 @@ mod tests {
         );
         assert!(diagonal.len() < connected.len());
     }
+
+    /// The scenes double as the mesher's stress test: the two trees are
+    /// almost nothing but diagonal contacts, and the landscape mixes
+    /// scales everywhere. All of them must come out closed and
+    /// 2-manifold — every edge contact is a place the surface used to
+    /// pinch before segment vertices split those junctions open.
+    #[test]
+    fn every_scene_meshes_to_a_closed_manifold_surface() {
+        use voxel_mesh::analysis::{edge_stats, weld};
+        use voxel_mesh::dmc::mesh_world;
+
+        for scene in [
+            Scene::TestBed,
+            Scene::Tree,
+            Scene::DiagonalTree,
+            Scene::Landscape,
+        ] {
+            let mesh = mesh_world(&build_world(scene));
+            let stats = edge_stats(&weld(&mesh));
+            assert_eq!(stats.boundary, 0, "{scene:?}: cracks: {stats:?}");
+            assert_eq!(stats.non_manifold, 0, "{scene:?}: pinched edges: {stats:?}");
+        }
+    }
 }
